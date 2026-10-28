@@ -50,6 +50,15 @@ def parse_ai_response_json(content: str) -> dict:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as exc:
+        # First try repairing unbalanced delimiters (e.g. a missing final
+        # brace on otherwise-complete output) before falling back to
+        # extracting a nested fragment, which loses the top-level fields.
+        repaired = _repair_unbalanced_json(cleaned)
+        if repaired != cleaned:
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
         return _extract_first_json_value(cleaned, exc)
 
 
@@ -84,6 +93,36 @@ def _normalize_text_content(content: str) -> str:
     if not text:
         raise EmptyAIResponseError("AI响应内容为空。")
     return text
+
+
+def _repair_unbalanced_json(content: str) -> str:
+    """Close unterminated strings/containers so truncated JSON becomes loadable.
+
+    Long model outputs occasionally drop the final closing brace while the
+    content is otherwise complete; appending the missing closers recovers it
+    instead of discarding a fully valid analysis.
+    """
+    closers: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in content:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            closers.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if closers:
+                closers.pop()
+    suffix = ('"' if in_string else "") + "".join(reversed(closers))
+    return content + suffix if suffix else content
 
 
 def _strip_code_fences(content: str) -> str:
