@@ -44,19 +44,35 @@ def extract_ai_response_content(response: Any) -> str:
     raise ValueError(f"无法识别的AI响应类型: {type(response).__name__}")
 
 
+def _safe_repair_json(cleaned: str):
+    """Repair via safe-json-repair (native lib) if available; None otherwise.
+
+    Handles stray closers that orphan later fields, truncated strings,
+    control characters and trailing commas — never throws on input.
+    """
+    try:
+        from safe_json_repair import parse_json_safe
+    except ImportError:
+        return None
+    value = parse_json_safe(cleaned)
+    return value if isinstance(value, dict) else None
+
+
 def parse_ai_response_json(content: str) -> dict:
     """解析 AI 文本响应中的 JSON。"""
     cleaned = _strip_code_fences(content)
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        # First try repairing unbalanced delimiters (e.g. a missing final
-        # brace on otherwise-complete output) before falling back to
-        # extracting a nested fragment, which loses the top-level fields.
-        repaired = _repair_unbalanced_json(cleaned)
-        if repaired != cleaned:
+        # Repair ladder before the last-resort fragment extraction, which
+        # loses top-level fields on truncated/unclosed model output.
+        repaired = _safe_repair_json(cleaned)
+        if repaired is not None:
+            return repaired
+        balanced = _repair_unbalanced_json(cleaned)
+        if balanced != cleaned:
             try:
-                return json.loads(repaired)
+                return json.loads(balanced)
             except json.JSONDecodeError:
                 pass
         return _extract_first_json_value(cleaned, exc)
