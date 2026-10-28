@@ -22,3 +22,7 @@ data/
 price_history/
 *.md
 !README.md
+data/
+state/
+price_history/
+config.json
