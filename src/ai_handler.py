@@ -385,7 +385,7 @@ async def get_ai_analysis(product_data, image_paths=None, prompt_text=""):
                 model=MODEL_NAME,
                 messages=messages,
                 temperature=current_temperature,
-                max_output_tokens=4000,
+                max_output_tokens=8192,
                 enable_json_output=use_response_format,
             )
             if not use_temperature:

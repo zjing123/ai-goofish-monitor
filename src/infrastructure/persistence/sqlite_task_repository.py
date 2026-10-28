@@ -21,6 +21,7 @@ def _row_to_task(row) -> Task:
     payload["free_shipping"] = bool(payload["free_shipping"])
     payload["is_running"] = bool(payload["is_running"])
     payload["keyword_rules"] = json.loads(payload.pop("keyword_rules_json") or "[]")
+    payload["blacklist_keywords"] = json.loads(payload.pop("blacklist_keywords_json") or "[]")
     return Task(**payload)
 
 
@@ -92,13 +93,15 @@ class SqliteTaskRepository(TaskRepository):
                     max_pages, personal_only, min_price, max_price, cron,
                     ai_prompt_base_file, ai_prompt_criteria_file, account_state_file,
                     account_strategy, free_shipping, new_publish_option, region,
-                    decision_mode, keyword_rules_json, is_running
+                    decision_mode, keyword_rules_json, blacklist_keywords_json,
+                    is_running
                 ) VALUES (
                     :id, :task_name, :enabled, :keyword, :description, :analyze_images,
                     :max_pages, :personal_only, :min_price, :max_price, :cron,
                     :ai_prompt_base_file, :ai_prompt_criteria_file, :account_state_file,
                     :account_strategy, :free_shipping, :new_publish_option, :region,
-                    :decision_mode, :keyword_rules_json, :is_running
+                    :decision_mode, :keyword_rules_json, :blacklist_keywords_json,
+                    :is_running
                 )
                 """,
                 payload,
@@ -128,5 +131,9 @@ class SqliteTaskRepository(TaskRepository):
         values["free_shipping"] = int(task.free_shipping)
         values["is_running"] = int(task.is_running)
         values["keyword_rules_json"] = json.dumps(task.keyword_rules or [], ensure_ascii=False)
+        values["blacklist_keywords_json"] = json.dumps(
+            task.blacklist_keywords or [], ensure_ascii=False
+        )
         values.pop("keyword_rules", None)
+        values.pop("blacklist_keywords", None)
         return values

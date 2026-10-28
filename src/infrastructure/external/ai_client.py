@@ -225,7 +225,12 @@ class AIClient:
                 request_params = remove_temperature_param(request_params)
 
             if self.settings.enable_thinking:
-                request_params["extra_body"] = {"enable_thinking": False}
+                # Send both vendor variants: Qwen3 uses enable_thinking,
+                # DeepSeek uses thinking.type=disabled.
+                request_params["extra_body"] = {
+                    "enable_thinking": False,
+                    "thinking": {"type": "disabled"},
+                }
 
             try:
                 response = await create_ai_response_async(

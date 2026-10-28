@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
 from src.infrastructure.external.ai_client import _sanitize_no_proxy_env
+from src.services.result_blacklist_service import parse_blacklist_keywords_setting
 
 # --- AI & Notification Configuration ---
 load_dotenv()
@@ -90,12 +91,25 @@ if not client:
 if not all([BASE_URL, MODEL_NAME]) and 'prompt_generator.py' in sys.argv[0]:
     sys.exit("错误：请确保在 .env 文件中完整设置了 OPENAI_BASE_URL 和 OPENAI_MODEL_NAME。(OPENAI_API_KEY 对于某些服务是可选的)")
 
+# Pre-AI blacklist keywords: products whose title/details match any of these
+# are rejected before seller/image/AI requests (cost control).
+# Serves as the global fallback when a task has no blacklist of its own.
+TITLE_BLACKLIST_KEYWORDS = parse_blacklist_keywords_setting(
+    os.getenv("TITLE_BLACKLIST_KEYWORDS", "")
+)
+
+
 def get_ai_request_params(**kwargs):
     """
     构建AI请求参数，根据ENABLE_THINKING和ENABLE_RESPONSE_FORMAT环境变量决定是否添加相应参数
     """
     if ENABLE_THINKING:
-        kwargs["extra_body"] = {"enable_thinking": False}
+        # Send both vendor variants: Qwen3 uses enable_thinking,
+        # DeepSeek uses thinking.type=disabled.
+        kwargs["extra_body"] = {
+            "enable_thinking": False,
+            "thinking": {"type": "disabled"},
+        }
     
     # 如果禁用结构化输出，则移除 text.format 配置
     if not ENABLE_RESPONSE_FORMAT and "text" in kwargs:

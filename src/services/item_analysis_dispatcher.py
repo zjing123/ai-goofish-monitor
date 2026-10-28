@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from src.keyword_rule_engine import build_search_text, evaluate_keyword_rules
+from src.config import TITLE_BLACKLIST_KEYWORDS
+from src.services.result_blacklist_service import match_blacklist_keywords
 
 
 SellerLoader = Callable[[str], Awaitable[dict]]
@@ -30,6 +32,8 @@ class ItemAnalysisJob:
     seller_id: Optional[str]
     zhima_credit_text: Optional[str]
     registration_duration_text: str
+    # Task-level pre-AI blacklist; empty tuple falls back to the global env rules.
+    blacklist_keywords: tuple[str, ...] = ()
 
 
 class ItemAnalysisDispatcher:
@@ -72,6 +76,26 @@ class ItemAnalysisDispatcher:
     async def _process_job(self, job: ItemAnalysisJob) -> None:
         record = copy.deepcopy(job.final_record)
         item_data = record.get("商品信息", {}) or {}
+
+        # Pre-analysis blacklist: reject obvious junk (e.g. recycling ads)
+        # before spending anything on seller/image/AI requests.
+        # Task-level rules override the global env fallback.
+        blacklist_keywords = list(job.blacklist_keywords) or TITLE_BLACKLIST_KEYWORDS
+        if blacklist_keywords:
+            matched = match_blacklist_keywords(record, blacklist_keywords)
+            if matched:
+                blacklist_source = "任务" if job.blacklist_keywords else "全局"
+                record["卖家信息"] = {}
+                record["ai_analysis"] = {
+                    "analysis_source": "blacklist",
+                    "is_recommended": False,
+                    "reason": f"命中{blacklist_source}黑名单关键词，跳过分析: {', '.join(matched)}",
+                    "keyword_hit_count": 0,
+                }
+                if await self._saver(record, job.keyword):
+                    self.completed_count += 1
+                return
+
         record["卖家信息"] = await self._load_seller_info(job)
         record["ai_analysis"] = await self._build_analysis_result(job, record)
         if await self._saver(record, job.keyword):

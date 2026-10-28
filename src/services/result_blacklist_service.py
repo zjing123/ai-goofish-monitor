@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Iterable
 
@@ -20,8 +21,9 @@ def normalize_blacklist_keywords(values: Iterable[str] | str | None) -> list[str
     if isinstance(values, str):
         raw_values.extend(_KEYWORD_SPLIT_PATTERN.split(values))
     else:
-        for value in values or []:
-            raw_values.extend(_KEYWORD_SPLIT_PATTERN.split(str(value)))
+        # Structured list input: each element is already one complete keyword.
+        # Do NOT re-split on commas — regex entries like `re:a{1,2}` contain them.
+        raw_values.extend(str(value) for value in values or [])
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -74,3 +76,39 @@ def match_blacklist_keywords(record: dict[str, Any], keywords: Iterable[str] | s
         return []
 
     return [keyword for keyword in normalized_keywords if _keyword_matches(keyword, search_text)]
+
+
+def parse_blacklist_keywords_setting(raw: str | None) -> list[str]:
+    """Parse a stored blacklist setting: JSON array first, plain separators as fallback.
+
+    JSON keeps regex entries containing commas (e.g. ``re:a{1,2}``) intact on
+    round-trip; plain comma/newline text stays supported for hand-edited .env.
+    """
+    if not raw:
+        return []
+    text = raw.strip()
+    if text.startswith("["):
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, list):
+                return normalize_blacklist_keywords(payload)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return normalize_blacklist_keywords(text)
+
+
+def dump_blacklist_keywords_setting(keywords: Iterable[str] | str | None) -> str:
+    """Serialize blacklist keywords for storage as a JSON array string."""
+    return json.dumps(normalize_blacklist_keywords(keywords), ensure_ascii=False)
+
+
+def validate_blacklist_keywords(keywords: Iterable[str] | str | None) -> list[str]:
+    """Normalize keywords and reject invalid ``re:`` patterns with a ValueError."""
+    normalized = normalize_blacklist_keywords(keywords)
+    for keyword in normalized:
+        if _is_regex_keyword(keyword):
+            try:
+                re.compile(keyword[len(_REGEX_PREFIX):])
+            except re.error as exc:
+                raise ValueError(f"无效的正则黑名单关键词 '{keyword}': {exc}") from exc
+    return normalized

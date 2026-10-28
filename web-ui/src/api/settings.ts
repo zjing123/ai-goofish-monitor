@@ -77,6 +77,11 @@ export interface RotationSettings {
   PROXY_BLACKLIST_TTL?: number
 }
 
+export interface BlacklistSettings {
+  blacklist_keywords: string[]
+  env_key?: string
+}
+
 export interface SystemStatus {
   scraper_running: boolean
   running_task_ids?: number[]
@@ -163,6 +168,20 @@ export async function testAiSettings(settings: AiSettings): Promise<{ success: b
 
 export async function getSystemStatus(): Promise<SystemStatus> {
   return await http('/api/settings/status')
+}
+
+export async function getBlacklistSettings(): Promise<BlacklistSettings> {
+  return await http('/api/settings/blacklist')
+}
+
+export async function updateBlacklistSettings(
+  keywords: string[]
+): Promise<{ message: string; blacklist_keywords: string[] }> {
+  return await http('/api/settings/blacklist', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ blacklist_keywords: keywords })
+  })
 }
 
 export async function updateLoginState(content: string): Promise<{ message: string }> {

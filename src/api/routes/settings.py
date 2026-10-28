@@ -2,7 +2,7 @@
 设置管理路由
 """
 import os
-from typing import Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
@@ -36,6 +36,11 @@ from src.services.notification_config_service import (
 )
 from src.services.notification_service import build_notification_service
 from src.services.process_service import ProcessService
+from src.services.result_blacklist_service import (
+    dump_blacklist_keywords_setting,
+    parse_blacklist_keywords_setting,
+    validate_blacklist_keywords,
+)
 
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -212,6 +217,43 @@ async def update_rotation_settings(settings: RotationSettingsModel):
         raise HTTPException(status_code=500, detail="更新轮换设置失败")
     _reload_env()
     return {"message": "轮换设置已成功更新"}
+
+
+class BlacklistSettingsModel(BaseModel):
+    """全局黑名单设置模型（AI 前置过滤）"""
+
+    blacklist_keywords: List[str] = Field(default_factory=list)
+
+
+BLACKLIST_ENV_KEY = "TITLE_BLACKLIST_KEYWORDS"
+
+
+@router.get("/blacklist")
+async def get_blacklist_settings():
+    keywords = parse_blacklist_keywords_setting(env_manager.get_value(BLACKLIST_ENV_KEY, ""))
+    return {
+        "blacklist_keywords": keywords,
+        "env_key": BLACKLIST_ENV_KEY,
+    }
+
+
+@router.put("/blacklist")
+async def update_blacklist_settings(settings: BlacklistSettingsModel):
+    try:
+        keywords = validate_blacklist_keywords(settings.blacklist_keywords)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    success = env_manager.update_values(
+        {BLACKLIST_ENV_KEY: dump_blacklist_keywords_setting(keywords)}
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="更新黑名单设置失败")
+    _reload_env()
+    return {
+        "message": "黑名单规则已成功更新",
+        "blacklist_keywords": keywords,
+    }
 
 
 @router.get("/status")

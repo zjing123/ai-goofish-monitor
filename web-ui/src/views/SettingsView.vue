@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/toast'
 import { getPromptContent, listPrompts, updatePrompt } from '@/api/prompts'
+import { getBlacklistSettings, updateBlacklistSettings } from '@/api/settings'
 import NotificationSettingsPanel from '@/components/settings/NotificationSettingsPanel.vue'
 import RotationSettingsPanel from '@/components/settings/RotationSettingsPanel.vue'
 const { t } = useI18n()
@@ -36,7 +37,7 @@ const {
 
 const activeTab = ref('ai')
 const route = useRoute()
-const validTabs = new Set(['notifications', 'ai', 'rotation', 'status', 'prompts'])
+const validTabs = new Set(['notifications', 'ai', 'rotation', 'status', 'prompts', 'blacklist'])
 
 const promptFiles = ref<string[]>([])
 const selectedPrompt = ref<string | null>(null)
@@ -44,6 +45,11 @@ const promptContent = ref('')
 const isPromptLoading = ref(false)
 const isPromptSaving = ref(false)
 const promptError = ref<string | null>(null)
+
+const blacklistInput = ref('')
+const isBlacklistLoading = ref(false)
+const isBlacklistSaving = ref(false)
+const blacklistError = ref<string | null>(null)
 
 function notifySuccess(title: string, description?: string) {
   toast({ title, description })
@@ -143,9 +149,42 @@ async function handleSavePrompt() {
   }
 }
 
+async function fetchBlacklist() {
+  isBlacklistLoading.value = true
+  blacklistError.value = null
+  try {
+    const data = await getBlacklistSettings()
+    blacklistInput.value = (data.blacklist_keywords || []).join('\n')
+  } catch (e) {
+    blacklistError.value = (e as Error).message || t('settings.blacklist.loadFailed')
+  } finally {
+    isBlacklistLoading.value = false
+  }
+}
+
+async function handleSaveBlacklist() {
+  const keywords = String(blacklistInput.value || '')
+    .split(/[\n,，]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+  isBlacklistSaving.value = true
+  try {
+    const res = await updateBlacklistSettings(keywords)
+    blacklistInput.value = (res.blacklist_keywords || []).join('\n')
+    notifySuccess(t('settings.blacklist.saved'), res.message)
+  } catch (e) {
+    notifyError(t('settings.blacklist.saveFailed'), (e as Error).message)
+  } finally {
+    isBlacklistSaving.value = false
+  }
+}
+
 watch(activeTab, (tab) => {
   if (tab === 'prompts') {
     fetchPrompts()
+  }
+  if (tab === 'blacklist') {
+    fetchBlacklist()
   }
 })
 
@@ -193,6 +232,7 @@ watch(selectedPrompt, async (value) => {
         <TabsTrigger class="shrink-0" value="notifications">{{ t('settings.tabs.notifications') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="status">{{ t('settings.tabs.status') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="prompts">{{ t('settings.tabs.prompts') }}</TabsTrigger>
+        <TabsTrigger class="shrink-0" value="blacklist">{{ t('settings.tabs.blacklist') }}</TabsTrigger>
       </TabsList>
 
       <!-- AI Tab -->
@@ -368,6 +408,42 @@ watch(selectedPrompt, async (value) => {
           <CardFooter>
             <Button :disabled="isPromptSaving || !selectedPrompt" @click="handleSavePrompt">
               {{ isPromptSaving ? t('common.saving') : t('settings.prompts.save') }}
+            </Button>
+          </CardFooter>
+        </Card>
+      </TabsContent>
+
+      <!-- Blacklist Tab -->
+      <TabsContent value="blacklist">
+        <Card>
+          <CardHeader>
+            <CardTitle>{{ t('settings.blacklist.title') }}</CardTitle>
+            <CardDescription>{{ t('settings.blacklist.description') }}</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div v-if="blacklistError" class="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
+              {{ blacklistError }}
+            </div>
+
+            <div class="grid gap-2">
+              <Label>{{ t('settings.blacklist.keywords') }}</Label>
+              <Textarea
+                v-model="blacklistInput"
+                class="min-h-[160px]"
+                :disabled="isBlacklistLoading"
+                :placeholder="t('settings.blacklist.placeholder')"
+              />
+              <p class="text-xs text-gray-500">
+                {{ t('settings.blacklist.hint') }}
+              </p>
+              <p class="text-xs text-gray-500">
+                {{ t('settings.blacklist.regexHint') }}
+              </p>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button :disabled="isBlacklistSaving || isBlacklistLoading" @click="handleSaveBlacklist">
+              {{ isBlacklistSaving ? t('common.saving') : t('settings.blacklist.save') }}
             </Button>
           </CardFooter>
         </Card>

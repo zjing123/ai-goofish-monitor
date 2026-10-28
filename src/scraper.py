@@ -519,6 +519,8 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
     if decision_mode not in {"ai", "keyword"}:
         decision_mode = "ai"
     keyword_rules = task_config.get("keyword_rules") or []
+    # Task-level pre-AI blacklist; empty list falls back to the global env rules.
+    blacklist_keywords = task_config.get("blacklist_keywords") or []
     free_shipping = task_config.get("free_shipping", False)
     raw_new_publish = task_config.get("new_publish_option") or ""
     new_publish_option = raw_new_publish.strip()
@@ -1147,6 +1149,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                         analyze_images=analyze_images,
                                         prompt_text=ai_prompt_text,
                                         keyword_rules=tuple(keyword_rules or []),
+                                        blacklist_keywords=tuple(blacklist_keywords or []),
                                         final_record=final_record,
                                         seller_id=str(user_id) if user_id else None,
                                         zhima_credit_text=zhima_credit_text,
