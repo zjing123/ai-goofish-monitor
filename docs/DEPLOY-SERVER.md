@@ -75,16 +75,42 @@ WEBHOOK_BODY={"appToken":"AT_xxx","content":"${content}","summary":"${title}","c
 
 ## 四、迁移本地数据（可选，推荐）
 
-把本地已跑通的数据拷过去，任务/黑名单/登录态直接继承：
+把本地已跑通的数据拷过去，任务/结果/黑名单/登录态直接继承。
+
+数据位置对照：
+
+| 目录/文件 | 内容 | 是否必须 |
+|---|---|---|
+| `data/app.sqlite3` | 任务、抓取结果、全局/结果黑名单 | ✅ |
+| `prompts/*_criteria.txt` | 任务引用的 AI 分析标准 | ✅（缺了任务会跳过 AI 分析）|
+| `state/XY_*.json` | 闲鱼登录态（cookies） | ✅（在 `state/` 目录，非根目录）|
+| `jsonl/`、`price_history/` | 旧版结果/价格快照 | 通常为空，可不迁 |
+
+> ⚠️ SQLite 为 WAL 模式，**两侧容器都要先停**再拷贝，避免热拷贝丢数据或拷到写一半的文件。
+> ⚠️ 同步会**覆盖服务器上同名数据**（若服务器上已建过任务会丢失）。
+> ⚠️ 同一闲鱼登录态不要两台机器同时跑任务（风控/互踢风险）。同步后建议本地保持停止，以服务器为唯一数据源。
 
 ```bash
-# 在本地机器执行（SERVER 改为服务器地址）
 SERVER=user@your-server
-scp xianyu_state.json $SERVER:/opt/ai-goofish-monitor/   # 闲鱼登录态（cookies）
-scp -r data    $SERVER:/opt/ai-goofish-monitor/           # SQLite：任务+结果+黑名单
-scp -r prompts $SERVER:/opt/ai-goofish-monitor/           # 已生成的 AI 分析标准
-scp -r state   $SERVER:/opt/ai-goofish-monitor/           # 多账号状态（如有）
+DIR=/opt/ai-goofish-monitor          # 服务器上仓库路径
+
+# 1) 两侧停容器，保证 SQLite 一致性
+docker compose -f docker-compose.dev.yaml stop app
+ssh $SERVER "cd $DIR && docker compose -f docker-compose.dev.yaml stop app"
+
+# 2) 同步（rsync 为例；无 rsync 用 scp -r）
+rsync -av data/    $SERVER:$DIR/data/
+rsync -av prompts/ $SERVER:$DIR/prompts/
+rsync -av state/   $SERVER:$DIR/state/
+
+# 3) 服务器启动并验证
+ssh $SERVER "cd $DIR && docker compose -f docker-compose.dev.yaml up -d"
+# 验证：Web UI 任务列表、结果页历史条数、系统设置→黑名单规则、账号管理里的登录态
+
+# 4) 本地容器保持停止（避免双跑）；确需本地再跑：docker compose -f docker-compose.dev.yaml start app
 ```
+
+`.env` **不迁移**（服务器已按第三章配置好）。
 
 不迁移也可以：部署后在 Web UI 重新创建任务、重新上传登录态。
 
