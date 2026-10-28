@@ -5,11 +5,18 @@ services:
     pull_policy: always
     init: true
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
       APP_DATABASE_FILE: /app/data/app.sqlite3
+      # Override Docker Desktop's auto-injected host proxy (127.0.0.1:8888
+      # inside the container points at the container itself, breaking all
+      # outbound requests). This container goes direct via host NAT.
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
     volumes:
       - ./.env:/app/.env
       - ./data:/app/data

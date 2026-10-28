@@ -2,7 +2,8 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /web-ui
 COPY web-ui/package*.json ./
-RUN npm ci
+# Use CN mirror: official npm registry is slow/unreachable from CN networks
+RUN npm ci --registry=https://registry.npmmirror.com
 COPY web-ui/ .
 RUN npm run build
 
@@ -17,7 +18,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # 创建虚拟环境并安装 Python 运行时依赖
 RUN python3 -m venv $VIRTUAL_ENV
 COPY requirements-runtime.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements-runtime.txt
+# Use Aliyun mirror: tuna blocks this host's egress IP with 403
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements-runtime.txt
 
 # Stage 3: Create the final, lean image
 FROM python:3.11-slim-bookworm
@@ -33,6 +35,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
+# Use CN mirror for Chromium download: official Playwright CDN is slow/unreachable from CN networks
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tzdata \
