@@ -41,7 +41,10 @@ COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 # Use CN mirror for Chromium download: official Playwright CDN is slow/unreachable from CN networks
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
-RUN apt-get update \
+# Swap Debian apt sources to the Aliyun mirror: deb.debian.org throttles/fails
+# from CN networks at peak hours (breaks apt-get and playwright --with-deps).
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         tzdata \
         tini \
