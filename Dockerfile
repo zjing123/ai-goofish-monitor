@@ -2,8 +2,10 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /web-ui
 COPY web-ui/package*.json ./
-# Use CN mirror: official npm registry is slow/unreachable from CN networks
-RUN npm ci --registry=https://registry.npmmirror.com
+# Use CN mirror: official npm registry is slow/unreachable from CN networks.
+# Cache mount keeps the npm download cache across builds even when this layer
+# is invalidated (e.g. package.json changes).
+RUN --mount=type=cache,target=/root/.npm npm ci --registry=https://registry.npmmirror.com
 COPY web-ui/ .
 RUN npm run build
 
@@ -18,8 +20,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # 创建虚拟环境并安装 Python 运行时依赖
 RUN python3 -m venv $VIRTUAL_ENV
 COPY requirements-runtime.txt .
-# Use Aliyun mirror: tuna blocks this host's egress IP with 403
-RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements-runtime.txt
+# Use Aliyun mirror: tuna blocks this host's egress IP with 403.
+# Cache mount keeps downloaded wheels across builds; without it, every
+# requirements change re-downloads ~200MB at mirror throttling speeds.
+RUN --mount=type=cache,target=/root/.cache/pip pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements-runtime.txt
 
 # Stage 3: Create the final, lean image
 FROM python:3.11-slim-bookworm
