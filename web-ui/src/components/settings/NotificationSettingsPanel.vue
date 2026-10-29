@@ -93,10 +93,9 @@ function syncFromSettings(settings: NotificationSettings) {
 
 watch(() => props.settings, syncFromSettings, { immediate: true, deep: true })
 
+const configuredChannels = computed(() => props.settings.CONFIGURED_CHANNELS ?? [])
 const activeChannels = computed(() =>
-  (props.settings.CONFIGURED_CHANNELS ?? []).filter(
-    (channel) => !disabledChannels.value.has(channel)
-  )
+  configuredChannels.value.filter((channel) => !disabledChannels.value.has(channel))
 )
 const summaryText = computed(() => (
   activeChannels.value.length ? activeChannels.value.join(' / ') : t('notifyPanel.noActiveChannels')
@@ -179,7 +178,9 @@ function buildScopedPayload(channel?: ChannelKey): NotificationSettingsUpdate {
 }
 
 function isChannelConfigured(channel: ChannelKey) {
-  return activeChannels.value.includes(channel)
+  // Saved credentials only — must stay true while the channel is switched
+  // off, otherwise the toggle greys out and can never be turned back on.
+  return configuredChannels.value.includes(channel)
 }
 
 async function handleSave() {
@@ -280,13 +281,13 @@ function resolveChannelBadge(channel: ChannelKey) {
 
     <div v-else class="grid gap-4">
       <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-sky-500" :class="isChannelDisabled('ntfy') ? 'opacity-60' : ''">
-        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><Radio class="h-4 w-4 text-sky-600" /> Ntfy</span><Switch :model-value="!isChannelDisabled('ntfy')" :disabled="!isChannelConfigured('ntfy') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('ntfy', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.ntfy.description') }}</CardDescription></CardHeader>
+        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><Radio class="h-4 w-4 text-sky-600" /> Ntfy</span><Switch :model-value="isChannelConfigured('ntfy') && !isChannelDisabled('ntfy')" :disabled="!isChannelConfigured('ntfy') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('ntfy', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.ntfy.description') }}</CardDescription></CardHeader>
         <CardContent><Label>Ntfy Topic URL</Label><Input :model-value="form.NTFY_TOPIC_URL ?? ''" placeholder="https://ntfy.sh/topic" @update:model-value="(value) => updateField('NTFY_TOPIC_URL', String(value))" /></CardContent>
         <CardFooter class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><Badge :variant="isChannelConfigured('ntfy') ? 'default' : 'outline'">{{ resolveChannelBadge('ntfy') }}</Badge><div class="flex flex-wrap gap-2"><Button variant="ghost" size="sm" :disabled="props.isSaving" @click="clearChannel('ntfy')"><Trash2 class="h-4 w-4" />{{ t('notifyPanel.clear') }}</Button><Button variant="outline" size="sm" :disabled="props.isSaving" @click="handleTest('ntfy')"><TestTube2 class="h-4 w-4" />{{ t('notifyPanel.testThisChannel') }}</Button></div></CardFooter>
       </Card>
 
       <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-green-500" :class="isChannelDisabled('pushplus') ? 'opacity-60' : ''">
-        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">PushPlus</span><Switch :model-value="!isChannelDisabled('pushplus')" :disabled="!isChannelConfigured('pushplus') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('pushplus', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.pushplus.description') }}</CardDescription></CardHeader>
+        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">PushPlus</span><Switch :model-value="isChannelConfigured('pushplus') && !isChannelDisabled('pushplus')" :disabled="!isChannelConfigured('pushplus') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('pushplus', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.pushplus.description') }}</CardDescription></CardHeader>
         <CardContent class="grid gap-4 md:grid-cols-2">
           <div class="grid gap-2"><Label>Token</Label><Input type="password" :model-value="form.PUSHPLUS_TOKEN ?? ''" :placeholder="t('notifyPanel.secretKeepPlaceholder')" @update:model-value="(value) => updateSecretField('PUSHPLUS_TOKEN', String(value))" /></div>
           <div class="grid gap-2"><Label>Topic</Label><Input :model-value="form.PUSHPLUS_TOPIC ?? ''" :placeholder="t('notifyPanel.pushplus.topicPlaceholder')" @update:model-value="(value) => updateField('PUSHPLUS_TOPIC', String(value))" /></div>
@@ -296,13 +297,13 @@ function resolveChannelBadge(channel: ChannelKey) {
 
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-amber-500" :class="isChannelDisabled('bark') ? 'opacity-60' : ''">
-          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Bark</span><Switch :model-value="!isChannelDisabled('bark')" :disabled="!isChannelConfigured('bark') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('bark', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.bark.description') }}</CardDescription></CardHeader>
+          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Bark</span><Switch :model-value="isChannelConfigured('bark') && !isChannelDisabled('bark')" :disabled="!isChannelConfigured('bark') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('bark', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.bark.description') }}</CardDescription></CardHeader>
           <CardContent class="space-y-2"><Label>Bark URL</Label><Input :model-value="form.BARK_URL ?? ''" :placeholder="t('notifyPanel.secretPlaceholder')" @update:model-value="(value) => updateSecretField('BARK_URL', String(value))" /><p class="text-xs text-slate-500">{{ secretConfigured.BARK_URL ? t('notifyPanel.bark.configuredHint') : t('notifyPanel.notConfigured') }}</p></CardContent>
           <CardFooter class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><Badge :variant="isChannelConfigured('bark') ? 'default' : 'outline'">{{ resolveChannelBadge('bark') }}</Badge><div class="flex flex-wrap gap-2"><Button variant="ghost" size="sm" :disabled="props.isSaving" @click="clearChannel('bark')"><Trash2 class="h-4 w-4" />{{ t('notifyPanel.clear') }}</Button><Button variant="outline" size="sm" :disabled="props.isSaving" @click="handleTest('bark')"><TestTube2 class="h-4 w-4" />{{ t('notifyPanel.test') }}</Button></div></CardFooter>
         </Card>
 
         <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-violet-500" :class="isChannelDisabled('gotify') ? 'opacity-60' : ''">
-          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Gotify</span><Switch :model-value="!isChannelDisabled('gotify')" :disabled="!isChannelConfigured('gotify') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('gotify', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.gotify.description') }}</CardDescription></CardHeader>
+          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Gotify</span><Switch :model-value="isChannelConfigured('gotify') && !isChannelDisabled('gotify')" :disabled="!isChannelConfigured('gotify') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('gotify', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.gotify.description') }}</CardDescription></CardHeader>
           <CardContent class="grid gap-4 md:grid-cols-2">
             <div class="grid gap-2"><Label>Gotify URL</Label><Input :model-value="form.GOTIFY_URL ?? ''" placeholder="https://gotify.example.com" @update:model-value="(value) => updateField('GOTIFY_URL', String(value))" /></div>
             <div class="grid gap-2"><Label>Gotify Token</Label><Input type="password" :model-value="form.GOTIFY_TOKEN ?? ''" :placeholder="t('notifyPanel.secretKeepPlaceholder')" @update:model-value="(value) => updateSecretField('GOTIFY_TOKEN', String(value))" /></div>
@@ -313,13 +314,13 @@ function resolveChannelBadge(channel: ChannelKey) {
 
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-emerald-500" :class="isChannelDisabled('wecom') ? 'opacity-60' : ''">
-          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">{{ t('notifyPanel.wecom.title') }}</span><Switch :model-value="!isChannelDisabled('wecom')" :disabled="!isChannelConfigured('wecom') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('wecom', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.wecom.description') }}</CardDescription></CardHeader>
+          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">{{ t('notifyPanel.wecom.title') }}</span><Switch :model-value="isChannelConfigured('wecom') && !isChannelDisabled('wecom')" :disabled="!isChannelConfigured('wecom') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('wecom', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.wecom.description') }}</CardDescription></CardHeader>
           <CardContent class="space-y-2"><Label>{{ t('notifyPanel.wecom.urlLabel') }}</Label><Input :model-value="form.WX_BOT_URL ?? ''" :placeholder="t('notifyPanel.secretPlaceholder')" @update:model-value="(value) => updateSecretField('WX_BOT_URL', String(value))" /><p class="text-xs text-slate-500">{{ secretConfigured.WX_BOT_URL ? t('notifyPanel.wecom.configuredHint') : t('notifyPanel.notConfigured') }}</p></CardContent>
           <CardFooter class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><Badge :variant="isChannelConfigured('wecom') ? 'default' : 'outline'">{{ resolveChannelBadge('wecom') }}</Badge><div class="flex flex-wrap gap-2"><Button variant="ghost" size="sm" :disabled="props.isSaving" @click="clearChannel('wecom')"><Trash2 class="h-4 w-4" />{{ t('notifyPanel.clear') }}</Button><Button variant="outline" size="sm" :disabled="props.isSaving" @click="handleTest('wecom')"><TestTube2 class="h-4 w-4" />{{ t('notifyPanel.test') }}</Button></div></CardFooter>
         </Card>
 
         <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-blue-500" :class="isChannelDisabled('feishu') ? 'opacity-60' : ''">
-          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">{{ t('notifyPanel.feishu.title') }}</span><Switch :model-value="!isChannelDisabled('feishu')" :disabled="!isChannelConfigured('feishu') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('feishu', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.feishu.description') }}</CardDescription></CardHeader>
+          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">{{ t('notifyPanel.feishu.title') }}</span><Switch :model-value="isChannelConfigured('feishu') && !isChannelDisabled('feishu')" :disabled="!isChannelConfigured('feishu') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('feishu', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.feishu.description') }}</CardDescription></CardHeader>
           <CardContent class="space-y-2">
             <div class="grid gap-2"><Label>{{ t('notifyPanel.feishu.urlLabel') }}</Label><Input :model-value="form.FEISHU_BOT_URL ?? ''" :placeholder="t('notifyPanel.secretPlaceholder')" @update:model-value="(value) => updateSecretField('FEISHU_BOT_URL', String(value))" /><p class="text-xs text-slate-500">{{ secretConfigured.FEISHU_BOT_URL ? t('notifyPanel.feishu.configuredHint') : t('notifyPanel.notConfigured') }}</p></div>
             <div class="grid gap-2"><Label>{{ t('notifyPanel.feishu.secretLabel') }}</Label><Input :model-value="form.FEISHU_BOT_SECRET ?? ''" :placeholder="t('notifyPanel.secretKeepPlaceholder')" @update:model-value="(value) => updateSecretField('FEISHU_BOT_SECRET', String(value))" /><p class="text-xs text-slate-500">{{ secretConfigured.FEISHU_BOT_SECRET ? t('notifyPanel.feishu.secretConfiguredHint') : t('notifyPanel.feishu.secretHint') }}</p></div>
@@ -328,7 +329,7 @@ function resolveChannelBadge(channel: ChannelKey) {
         </Card>
 
         <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-cyan-500" :class="isChannelDisabled('telegram') ? 'opacity-60' : ''">
-          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Telegram</span><Switch :model-value="!isChannelDisabled('telegram')" :disabled="!isChannelConfigured('telegram') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('telegram', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.telegram.description') }}</CardDescription></CardHeader>
+          <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2">Telegram</span><Switch :model-value="isChannelConfigured('telegram') && !isChannelDisabled('telegram')" :disabled="!isChannelConfigured('telegram') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('telegram', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.telegram.description') }}</CardDescription></CardHeader>
           <CardContent class="grid gap-4 md:grid-cols-3">
             <div class="grid gap-2"><Label>Bot Token</Label><Input type="password" :model-value="form.TELEGRAM_BOT_TOKEN ?? ''" :placeholder="t('notifyPanel.secretKeepPlaceholder')" @update:model-value="(value) => updateSecretField('TELEGRAM_BOT_TOKEN', String(value))" /></div>
             <div class="grid gap-2"><Label>Chat ID</Label><Input :model-value="form.TELEGRAM_CHAT_ID ?? ''" :placeholder="t('notifyPanel.telegram.chatIdPlaceholder')" @update:model-value="(value) => updateField('TELEGRAM_CHAT_ID', String(value))" /></div>
@@ -339,7 +340,7 @@ function resolveChannelBadge(channel: ChannelKey) {
       </div>
 
       <Card class="app-surface-subtle overflow-hidden border-l-4 border-l-rose-500" :class="isChannelDisabled('webhook') ? 'opacity-60' : ''">
-        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><Webhook class="h-4 w-4 text-rose-500" /> {{ t('notifyPanel.webhook.title') }}</span><Switch :model-value="!isChannelDisabled('webhook')" :disabled="!isChannelConfigured('webhook') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('webhook', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.webhook.description') }}</CardDescription></CardHeader>
+        <CardHeader><CardTitle class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><Webhook class="h-4 w-4 text-rose-500" /> {{ t('notifyPanel.webhook.title') }}</span><Switch :model-value="isChannelConfigured('webhook') && !isChannelDisabled('webhook')" :disabled="!isChannelConfigured('webhook') || props.isSaving" :aria-label="t('notifyPanel.toggleChannel')" @update:model-value="(value) => toggleChannel('webhook', Boolean(value))" /></CardTitle><CardDescription>{{ t('notifyPanel.webhook.description') }}</CardDescription></CardHeader>
         <CardContent class="grid gap-4">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="grid gap-2"><Label>{{ t('notifyPanel.webhook.urlLabel') }}</Label><Input :model-value="form.WEBHOOK_URL ?? ''" :placeholder="t('notifyPanel.secretPlaceholder')" @update:model-value="(value) => updateSecretField('WEBHOOK_URL', String(value))" /></div>
