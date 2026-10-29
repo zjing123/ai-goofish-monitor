@@ -21,6 +21,13 @@ def _env_field(default, env_name: str, **kwargs):
     return Field(default, env=env_name, **kwargs)
 
 
+def parse_disabled_channels(value: str | None) -> set[str]:
+    """Parse NOTIFY_DISABLED_CHANNELS (comma-separated channel keys) into a set."""
+    if not value:
+        return set()
+    return {part.strip() for part in str(value).split(",") if part.strip()}
+
+
 if _USING_PYDANTIC_SETTINGS:
     class _EnvSettings(BaseSettings):
         model_config = SettingsConfigDict(
@@ -63,6 +70,8 @@ class NotificationSettings(_EnvSettings):
     gotify_token: Optional[str] = _env_field(None, "GOTIFY_TOKEN")
     bark_url: Optional[str] = _env_field(None, "BARK_URL")
     wx_bot_url: Optional[str] = _env_field(None, "WX_BOT_URL")
+    feishu_bot_url: Optional[str] = _env_field(None, "FEISHU_BOT_URL")
+    feishu_bot_secret: Optional[str] = _env_field(None, "FEISHU_BOT_SECRET")
     telegram_bot_token: Optional[str] = _env_field(None, "TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = _env_field(None, "TELEGRAM_CHAT_ID")
     telegram_api_base_url: Optional[str] = _env_field(
@@ -76,18 +85,26 @@ class NotificationSettings(_EnvSettings):
     webhook_query_parameters: Optional[str] = _env_field(None, "WEBHOOK_QUERY_PARAMETERS")
     webhook_body: Optional[str] = _env_field(None, "WEBHOOK_BODY")
     pcurl_to_mobile: bool = _env_field(True, "PCURL_TO_MOBILE")
+    # Comma-separated channel keys that are temporarily switched off in the UI
+    notify_disabled_channels: str = _env_field("", "NOTIFY_DISABLED_CHANNELS")
 
     def has_any_notification_enabled(self) -> bool:
         """检查是否配置了任何通知服务"""
-        return any([
-            self.ntfy_topic_url,
-            self.pushplus_token,
-            self.wx_bot_url,
-            self.gotify_url and self.gotify_token,
-            self.bark_url,
-            self.telegram_bot_token and self.telegram_chat_id,
-            self.webhook_url
-        ])
+        disabled = parse_disabled_channels(self.notify_disabled_channels)
+        channel_configured = {
+            "ntfy": self.ntfy_topic_url,
+            "pushplus": self.pushplus_token,
+            "wecom": self.wx_bot_url,
+            "feishu": self.feishu_bot_url,
+            "gotify": self.gotify_url and self.gotify_token,
+            "bark": self.bark_url,
+            "telegram": self.telegram_bot_token and self.telegram_chat_id,
+            "webhook": self.webhook_url,
+        }
+        return any(
+            configured and key not in disabled
+            for key, configured in channel_configured.items()
+        )
 
 
 class ScraperSettings(_EnvSettings):

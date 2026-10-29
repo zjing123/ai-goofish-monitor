@@ -1,9 +1,10 @@
 """
 通知客户端工厂
 """
-from src.infrastructure.config.settings import NotificationSettings
+from src.infrastructure.config.settings import NotificationSettings, parse_disabled_channels
 
 from .bark_client import BarkClient
+from .feishu_bot_client import FeishuBotClient
 from .gotify_client import GotifyClient
 from .ntfy_client import NtfyClient
 from .telegram_client import TelegramClient
@@ -14,7 +15,7 @@ from .pushplus_client import PushPlusClient
 
 def build_notification_clients(settings: NotificationSettings):
     pcurl_to_mobile = settings.pcurl_to_mobile
-    return [
+    clients = [
         NtfyClient(settings.ntfy_topic_url, pcurl_to_mobile=pcurl_to_mobile),
         PushPlusClient(
             settings.pushplus_token,
@@ -28,6 +29,11 @@ def build_notification_clients(settings: NotificationSettings):
             pcurl_to_mobile=pcurl_to_mobile,
         ),
         WeComBotClient(settings.wx_bot_url, pcurl_to_mobile=pcurl_to_mobile),
+        FeishuBotClient(
+            settings.feishu_bot_url,
+            settings.feishu_bot_secret,
+            pcurl_to_mobile=pcurl_to_mobile,
+        ),
         TelegramClient(
             settings.telegram_bot_token,
             settings.telegram_chat_id,
@@ -44,3 +50,6 @@ def build_notification_clients(settings: NotificationSettings):
             pcurl_to_mobile=pcurl_to_mobile,
         ),
     ]
+    # Channels switched off in the UI are excluded from real sends entirely.
+    disabled = parse_disabled_channels(settings.notify_disabled_channels)
+    return [client for client in clients if client.channel_key not in disabled]

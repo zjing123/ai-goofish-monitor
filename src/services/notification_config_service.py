@@ -8,6 +8,7 @@ from src.infrastructure.config.env_manager import env_manager
 from src.infrastructure.config.settings import (
     DEFAULT_TELEGRAM_API_BASE_URL,
     NotificationSettings,
+    parse_disabled_channels,
 )
 
 
@@ -19,6 +20,8 @@ NOTIFICATION_FIELD_MAP = {
     "GOTIFY_TOKEN": "gotify_token",
     "BARK_URL": "bark_url",
     "WX_BOT_URL": "wx_bot_url",
+    "FEISHU_BOT_URL": "feishu_bot_url",
+    "FEISHU_BOT_SECRET": "feishu_bot_secret",
     "TELEGRAM_BOT_TOKEN": "telegram_bot_token",
     "TELEGRAM_CHAT_ID": "telegram_chat_id",
     "TELEGRAM_API_BASE_URL": "telegram_api_base_url",
@@ -29,6 +32,7 @@ NOTIFICATION_FIELD_MAP = {
     "WEBHOOK_QUERY_PARAMETERS": "webhook_query_parameters",
     "WEBHOOK_BODY": "webhook_body",
     "PCURL_TO_MOBILE": "pcurl_to_mobile",
+    "NOTIFY_DISABLED_CHANNELS": "notify_disabled_channels",
 }
 
 CHANNEL_NOTIFICATION_FIELDS = {
@@ -37,6 +41,7 @@ CHANNEL_NOTIFICATION_FIELDS = {
     "bark": {"BARK_URL"},
     "gotify": {"GOTIFY_URL", "GOTIFY_TOKEN"},
     "wecom": {"WX_BOT_URL"},
+    "feishu": {"FEISHU_BOT_URL", "FEISHU_BOT_SECRET"},
     "telegram": {
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_CHAT_ID",
@@ -56,6 +61,8 @@ SECRET_NOTIFICATION_FIELDS = {
     "BARK_URL",
     "GOTIFY_TOKEN",
     "WX_BOT_URL",
+    "FEISHU_BOT_URL",
+    "FEISHU_BOT_SECRET",
     "TELEGRAM_BOT_TOKEN",
     "WEBHOOK_URL",
     "WEBHOOK_HEADERS",
@@ -103,6 +110,8 @@ def build_notification_settings_response(
         "GOTIFY_TOKEN": "",
         "BARK_URL": "",
         "WX_BOT_URL": "",
+        "FEISHU_BOT_URL": "",
+        "FEISHU_BOT_SECRET": "",
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_CHAT_ID": notification_settings.telegram_chat_id or "",
         "TELEGRAM_API_BASE_URL": (
@@ -121,6 +130,9 @@ def build_notification_settings_response(
         attr_name = NOTIFICATION_FIELD_MAP[field]
         response[f"{field}_SET"] = bool(getattr(notification_settings, attr_name))
     response["CONFIGURED_CHANNELS"] = build_configured_channels(notification_settings)
+    response["DISABLED_CHANNELS"] = sorted(
+        parse_disabled_channels(notification_settings.notify_disabled_channels)
+    )
     return response
 
 
@@ -135,6 +147,8 @@ def build_notification_status_flags(
         "gotify_token_set": bool(notification_settings.gotify_token),
         "bark_url_set": bool(notification_settings.bark_url),
         "wx_bot_url_set": bool(notification_settings.wx_bot_url),
+        "feishu_bot_url_set": bool(notification_settings.feishu_bot_url),
+        "feishu_bot_secret_set": bool(notification_settings.feishu_bot_secret),
         "telegram_bot_token_set": bool(notification_settings.telegram_bot_token),
         "telegram_chat_id_set": bool(notification_settings.telegram_chat_id),
         "webhook_url_set": bool(notification_settings.webhook_url),
@@ -157,6 +171,8 @@ def build_configured_channels(
         channels.append("gotify")
     if notification_settings.wx_bot_url:
         channels.append("wecom")
+    if notification_settings.feishu_bot_url:
+        channels.append("feishu")
     if notification_settings.telegram_bot_token and notification_settings.telegram_chat_id:
         channels.append("telegram")
     if notification_settings.webhook_url:
@@ -209,6 +225,8 @@ def prepare_notification_test_settings(
             patch_payload,
             existing_settings,
         )
+        # Tests must reach every configured channel even while switched off.
+        merged_settings.notify_disabled_channels = ""
         return merged_settings
 
     if channel not in CHANNEL_NOTIFICATION_FIELDS:
@@ -268,6 +286,8 @@ def load_notification_settings() -> NotificationSettings:
             "gotify_token": _normalize_existing_text(env_manager.get_value("GOTIFY_TOKEN")),
             "bark_url": _normalize_existing_text(env_manager.get_value("BARK_URL")),
             "wx_bot_url": _normalize_existing_text(env_manager.get_value("WX_BOT_URL")),
+            "feishu_bot_url": _normalize_existing_text(env_manager.get_value("FEISHU_BOT_URL")),
+            "feishu_bot_secret": _normalize_existing_text(env_manager.get_value("FEISHU_BOT_SECRET")),
             "telegram_bot_token": _normalize_existing_text(env_manager.get_value("TELEGRAM_BOT_TOKEN")),
             "telegram_chat_id": _normalize_existing_text(env_manager.get_value("TELEGRAM_CHAT_ID")),
             "telegram_api_base_url": (
@@ -281,6 +301,10 @@ def load_notification_settings() -> NotificationSettings:
             "webhook_query_parameters": _normalize_existing_text(env_manager.get_value("WEBHOOK_QUERY_PARAMETERS")),
             "webhook_body": _normalize_existing_text(env_manager.get_value("WEBHOOK_BODY")),
             "pcurl_to_mobile": _env_bool(env_manager.get_value("PCURL_TO_MOBILE"), True),
+            "notify_disabled_channels": _normalize_existing_text(
+                env_manager.get_value("NOTIFY_DISABLED_CHANNELS")
+            )
+            or "",
         }
     )
 
@@ -297,6 +321,11 @@ def _normalize_patch_value(env_name: str, value):
     if value is None:
         return None
     text = str(value).strip()
+    # Keep "" as an explicit empty value instead of None: the deletion path
+    # leaves a stale copy in os.environ (load_dotenv never unsets), which
+    # get_value falls back to and the API would keep reporting old channels.
+    if env_name == "NOTIFY_DISABLED_CHANNELS":
+        return text
     return text or None
 
 

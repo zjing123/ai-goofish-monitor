@@ -84,6 +84,8 @@ class NotificationSettingsModel(BaseModel):
     GOTIFY_TOKEN: Optional[str] = None
     BARK_URL: Optional[str] = None
     WX_BOT_URL: Optional[str] = None
+    FEISHU_BOT_URL: Optional[str] = None
+    FEISHU_BOT_SECRET: Optional[str] = None
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
     TELEGRAM_API_BASE_URL: Optional[str] = None
@@ -94,6 +96,7 @@ class NotificationSettingsModel(BaseModel):
     WEBHOOK_QUERY_PARAMETERS: Optional[str] = None
     WEBHOOK_BODY: Optional[str] = None
     PCURL_TO_MOBILE: Optional[bool] = None
+    NOTIFY_DISABLED_CHANNELS: Optional[str] = None
 
 
 class NotificationTestRequest(BaseModel):

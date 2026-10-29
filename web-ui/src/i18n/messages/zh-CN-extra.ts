@@ -230,6 +230,8 @@ const zhCNExtra = {
     secretPlaceholder: '已配置则留空保留，输入新值覆盖',
     secretKeepPlaceholder: '已配置则留空保留',
     notConfigured: '尚未配置。',
+    channelDisabled: '已停用',
+    toggleChannel: '启用/停用该通知渠道',
     ntfy: {
       description: '适合轻量推送，URL 非敏感，可直接回显和修改。',
     },
@@ -249,6 +251,15 @@ const zhCNExtra = {
       description: 'Bot URL 含 key，不回显，仅支持更新或清空。',
       urlLabel: '企业微信 Bot URL',
       configuredHint: '已保存机器人地址。',
+    },
+    feishu: {
+      title: '飞书机器人',
+      description: '群设置 → 群机器人 → 添加自定义机器人，获取 Webhook 地址；URL 与签名密钥不回显。',
+      urlLabel: '飞书机器人 Webhook URL',
+      configuredHint: '已保存机器人地址。',
+      secretLabel: '签名密钥（可选）',
+      secretConfiguredHint: '已保存签名密钥，发送时自动签名。',
+      secretHint: '机器人开启"签名校验"时必填，未开启请留空。',
     },
     telegram: {
       description: 'Bot Token 属于敏感字段，Chat ID 与反代地址可直接查看和修改。',

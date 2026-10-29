@@ -230,6 +230,8 @@ const enUSExtra = {
     secretPlaceholder: 'Leave blank to keep the current value, or enter a new value to overwrite it',
     secretKeepPlaceholder: 'Leave blank to keep the current value',
     notConfigured: 'Not configured yet.',
+    channelDisabled: 'Disabled',
+    toggleChannel: 'Enable/disable this notification channel',
     ntfy: {
       description: 'Best for lightweight delivery. The topic URL is not sensitive and can be displayed directly.',
     },
@@ -249,6 +251,15 @@ const enUSExtra = {
       description: 'The bot URL contains a key, so it is hidden and can only be updated or cleared.',
       urlLabel: 'WeCom Bot URL',
       configuredHint: 'Bot URL is already stored.',
+    },
+    feishu: {
+      title: 'Feishu Bot',
+      description: 'Group Settings → Group Bot → Add custom bot to get the webhook URL; URL and secret are hidden.',
+      urlLabel: 'Feishu Bot Webhook URL',
+      configuredHint: 'Bot URL is already stored.',
+      secretLabel: 'Signing Secret (optional)',
+      secretConfiguredHint: 'Secret stored; messages will be signed automatically.',
+      secretHint: 'Required only if the bot has signature verification enabled; otherwise leave empty.',
     },
     telegram: {
       description: 'The bot token is sensitive, while Chat ID and API base URL can be viewed and updated directly.',
