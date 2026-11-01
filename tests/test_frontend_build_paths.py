@@ -28,6 +28,8 @@ def test_frontend_build_output_path_is_consistent_across_configs():
         in frontend_dockerfile
     ), "Frontend-only Docker build must use the Vite build output path."
     assert "dist/" in dockerignore_lines
-    assert "web-ui/dist" not in dockerignore_lines
+    # The frontend dist is built inside the image; a stale local build must
+    # not leak into the build context.
+    assert "web-ui/dist" in dockerignore_lines
     assert '[ ! -d "dist" ]' in start_script
     assert "cp -r web-ui/dist ./" not in start_script

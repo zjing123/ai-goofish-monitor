@@ -28,10 +28,12 @@ def test_build_messages_without_images_uses_text_only_content():
         "只分析文字描述和卖家资质。",
     )
 
-    content = messages[0]["content"]
+    assert messages[0]["role"] == "system"
+    content = messages[1]["content"]
+    assert messages[1]["role"] == "user"
     assert isinstance(content, str)
     assert "MacBook Pro M2" in content
-    assert "未提供商品图片" in content
+    assert "未提供商品图片" in messages[0]["content"]
 
 
 def test_build_messages_with_images_uses_multimodal_content(monkeypatch):
@@ -44,10 +46,11 @@ def test_build_messages_with_images_uses_multimodal_content(monkeypatch):
         "结合图片和文字综合判断。",
     )
 
-    content = messages[0]["content"]
+    content = messages[1]["content"]
     assert isinstance(content, list)
-    assert content[0]["type"] == "image_url"
-    assert content[-1]["type"] == "text"
+    # Cache-friendly layout: text part first, image parts after.
+    assert content[0]["type"] == "text"
+    assert all(part["type"] == "image_url" for part in content[1:])
 
 
 def test_build_responses_input_converts_multimodal_messages():

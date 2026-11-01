@@ -51,4 +51,10 @@ def test_save_to_jsonl(tmp_path, monkeypatch):
             sort_order="asc",
         )
     )
-    assert records == [record]
+    # Loader decorates records with internal visibility fields (_status etc.)
+    # that the results API relies on; compare the payload without them.
+    stripped = [
+        {key: value for key, value in item.items() if not key.startswith("_")}
+        for item in records
+    ]
+    assert stripped == [record]
