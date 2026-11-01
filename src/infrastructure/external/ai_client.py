@@ -11,8 +11,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from src.ai_message_builder import (
-    build_analysis_text_prompt,
-    build_user_message_content,
+    build_analysis_messages,
 )
 from src.infrastructure.config.settings import AISettings
 from src.infrastructure.config.env_manager import env_manager
@@ -186,13 +185,12 @@ class AIClient:
             if base64_img:
                 image_data_urls.append(f"data:image/jpeg;base64,{base64_img}")
 
-        text_prompt = build_analysis_text_prompt(
+        return build_analysis_messages(
             product_json,
             prompt_text,
             include_images=bool(image_data_urls),
+            image_data_urls=image_data_urls,
         )
-        user_content = build_user_message_content(text_prompt, image_data_urls)
-        return [{"role": "user", "content": user_content}]
 
     async def _call_ai(
         self,

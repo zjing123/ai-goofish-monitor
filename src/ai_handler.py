@@ -27,8 +27,7 @@ from src.config import (
     client,
 )
 from src.ai_message_builder import (
-    build_analysis_text_prompt,
-    build_user_message_content,
+    build_analysis_messages,
 )
 from src.services.ai_response_parser import (
     EmptyAIResponseError,
@@ -329,13 +328,12 @@ async def get_ai_analysis(product_data, image_paths=None, prompt_text=""):
             if base64_image:
                 image_data_urls.append(f"data:image/jpeg;base64,{base64_image}")
 
-    combined_text_prompt = build_analysis_text_prompt(
+    messages = build_analysis_messages(
         product_details_json,
         system_prompt,
         include_images=bool(image_data_urls),
+        image_data_urls=image_data_urls,
     )
-    user_content = build_user_message_content(combined_text_prompt, image_data_urls)
-    messages = [{"role": "user", "content": user_content}]
 
     # 保存最终传输内容到日志文件
     try:
