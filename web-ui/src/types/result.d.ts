@@ -102,6 +102,8 @@ export interface ResultItem {
   ai_analysis: AiAnalysis;
   price_insight?: PriceInsight;
   _status?: 'active' | 'hidden' | 'expired';
+  _listing_status?: 'unknown' | 'on_sale' | 'sold' | 'delisted';
+  _listing_checked_at?: string | null;
   _effective_hidden?: boolean;
   _hidden_reason?: 'manual' | 'rule' | 'expired' | null;
   _matched_blacklist_keywords?: string[];

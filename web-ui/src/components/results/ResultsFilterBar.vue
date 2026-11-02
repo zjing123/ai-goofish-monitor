@@ -25,6 +25,7 @@ interface Props {
   aiRecommendedOnly: boolean
   keywordRecommendedOnly: boolean
   includeHidden: boolean
+  includeUnavailable: boolean
   sortBy: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'
   sortOrder: 'asc' | 'desc'
   isLoading: boolean
@@ -68,12 +69,14 @@ const emit = defineEmits<{
   (e: 'update:aiRecommendedOnly', value: boolean): void
   (e: 'update:keywordRecommendedOnly', value: boolean): void
   (e: 'update:includeHidden', value: boolean): void
+  (e: 'update:includeUnavailable', value: boolean): void
   (e: 'update:sortBy', value: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'): void
   (e: 'update:sortOrder', value: 'asc' | 'desc'): void
   (e: 'refresh'): void
   (e: 'export'): void
   (e: 'delete'): void
   (e: 'manage-blacklist'): void
+  (e: 'check-sales'): void
 }>()
 
 function handleToggleAiRecommended(value: boolean) {
@@ -176,11 +179,24 @@ function handleToggleKeywordRecommended(value: boolean) {
           />
           <Label for="include-hidden" class="cursor-pointer">{{ t('results.filters.includeHidden') }}</Label>
         </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="include-unavailable"
+            :model-value="props.includeUnavailable"
+            @update:modelValue="(value) => emit('update:includeUnavailable', value === true)"
+          />
+          <Label for="include-unavailable" class="cursor-pointer">{{ t('results.filters.includeUnavailable') }}</Label>
+        </div>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
         <Button @click="emit('refresh')" :disabled="props.isLoading">
           {{ t('common.refresh') }}
+        </Button>
+
+        <Button variant="outline" @click="emit('check-sales')">
+          {{ t('results.filters.checkSales') }}
         </Button>
 
         <Button

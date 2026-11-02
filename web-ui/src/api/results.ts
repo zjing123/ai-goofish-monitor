@@ -6,6 +6,7 @@ export interface GetResultContentParams {
   ai_recommended_only?: boolean;
   keyword_recommended_only?: boolean;
   include_hidden?: boolean;
+  include_unavailable?: boolean;
   sort_by?: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count';
   sort_order?: 'asc' | 'desc';
   page?: number;
@@ -70,5 +71,13 @@ export async function updateItemStatus(filename: string, itemId: string, status:
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
+  })
+}
+
+export async function triggerSaleCheck(payload: { limit?: number; lookback_days?: number } = {}): Promise<{ message: string; pid: number }> {
+  return await http('/api/results/sale-check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
 }

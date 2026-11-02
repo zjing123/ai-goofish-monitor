@@ -211,6 +211,15 @@ cd web-ui && npm run build
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_API_BASE_URL`
 - `WEBHOOK_*`
 
+### 商品状态巡检
+
+- SALE_CHECK_ENABLED：是否启用定时巡检，默认 true
+- SALE_CHECK_CRON：巡检 Cron，默认 0 */2 * * *（每 2 小时）
+- SALE_CHECK_BATCH_SIZE：单轮最多巡检条数，默认 40
+- SALE_CHECK_LOOKBACK_DAYS：只巡检最近 N 天抓到的推荐商品，默认 7
+
+巡检会回访商品详情页读取 itemStatus，把已售出/已下架写入商品状态，并从结果页、导出和价格走势中默认排除；在结果页勾选「显示已售/下架」可重新查看，也可以点「巡检商品状态」手动触发一轮。
+
 ### 代理轮换与失败保护
 
 - `PROXY_ROTATION_ENABLED`

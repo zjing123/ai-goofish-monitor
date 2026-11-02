@@ -6,8 +6,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from src.domain import sale_status as sale_state
 from src.infrastructure.persistence.sqlite_bootstrap import bootstrap_sqlite_storage
 from src.infrastructure.persistence.sqlite_connection import sqlite_connection
 from src.infrastructure.persistence.storage_names import build_result_filename
@@ -90,7 +91,14 @@ def _load_blacklist_keywords_from_conn(conn, filename: str) -> list[str]:
     return normalize_blacklist_keywords(payload)
 
 
-def _decorate_record_visibility(record: dict, status: str | None, blacklist_keywords: list[str]) -> dict:
+def _decorate_record_visibility(
+    record: dict,
+    status: str | None,
+    blacklist_keywords: list[str],
+    *,
+    sale_status: str | None = None,
+    sale_checked_at: str | None = None,
+) -> dict:
     matched_keywords = match_blacklist_keywords(record, blacklist_keywords)
     hidden_reason = None
     if status == "expired":
@@ -101,14 +109,25 @@ def _decorate_record_visibility(record: dict, status: str | None, blacklist_keyw
         hidden_reason = "rule"
 
     record["_status"] = status or "active"
+    record["_listing_status"] = sale_status or sale_state.UNKNOWN
+    record["_listing_checked_at"] = sale_checked_at
     record["_matched_blacklist_keywords"] = matched_keywords
     record["_hidden_reason"] = hidden_reason
     record["_effective_hidden"] = hidden_reason is not None
     return record
 
 
-def _is_record_visible(record: dict) -> bool:
-    return record.get("_effective_hidden") is not True
+def _is_record_visible(
+    record: dict,
+    *,
+    include_hidden: bool = False,
+    include_unavailable: bool = False,
+) -> bool:
+    if not include_hidden and record.get("_effective_hidden") is True:
+        return False
+    if include_unavailable:
+        return True
+    return record.get("_listing_status") not in sale_state.UNAVAILABLE_SALE_STATUSES
 
 
 def _load_filtered_records_from_conn(
@@ -120,6 +139,7 @@ def _load_filtered_records_from_conn(
     sort_by: str,
     sort_order: str,
     include_hidden: bool,
+    include_unavailable: bool,
 ) -> list[dict]:
     where_clause, params = _build_query_conditions(
         filename=filename,
@@ -129,7 +149,7 @@ def _load_filtered_records_from_conn(
     order_clause = _sort_expression(sort_by, sort_order)
     rows = conn.execute(
         f"""
-        SELECT raw_json, status
+        SELECT raw_json, status, sale_status, sale_checked_at
         FROM result_items
         WHERE {where_clause}
         ORDER BY {order_clause}
@@ -141,8 +161,18 @@ def _load_filtered_records_from_conn(
     records: list[dict] = []
     for row in rows:
         record = _parse_raw_record(str(row["raw_json"]), status=row["status"])
-        decorated = _decorate_record_visibility(record, row["status"], blacklist_keywords)
-        if include_hidden or _is_record_visible(decorated):
+        decorated = _decorate_record_visibility(
+            record,
+            row["status"],
+            blacklist_keywords,
+            sale_status=row["sale_status"],
+            sale_checked_at=row["sale_checked_at"],
+        )
+        if _is_record_visible(
+            decorated,
+            include_hidden=include_hidden,
+            include_unavailable=include_unavailable,
+        ):
             records.append(decorated)
     return records
 
@@ -263,6 +293,7 @@ async def query_result_records(
     page: int,
     limit: int,
     include_hidden: bool = False,
+    include_unavailable: bool = False,
 ) -> tuple[int, list[dict]]:
     return await asyncio.to_thread(
         _query_result_records_sync,
@@ -274,6 +305,7 @@ async def query_result_records(
         page,
         limit,
         include_hidden,
+        include_unavailable,
     )
 
 
@@ -286,6 +318,7 @@ def _query_result_records_sync(
     page: int,
     limit: int,
     include_hidden: bool,
+    include_unavailable: bool,
 ) -> tuple[int, list[dict]]:
     bootstrap_sqlite_storage()
     offset = max(page - 1, 0) * limit
@@ -298,6 +331,7 @@ def _query_result_records_sync(
             sort_by=sort_by,
             sort_order=sort_order,
             include_hidden=include_hidden,
+            include_unavailable=include_unavailable,
         )
     total = len(records)
     return total, records[offset: offset + limit]
@@ -311,6 +345,7 @@ async def load_all_result_records(
     sort_by: str,
     sort_order: str,
     include_hidden: bool = False,
+    include_unavailable: bool = False,
 ) -> list[dict]:
     return await asyncio.to_thread(
         _load_all_result_records_sync,
@@ -320,6 +355,7 @@ async def load_all_result_records(
         sort_by,
         sort_order,
         include_hidden,
+        include_unavailable,
     )
 
 
@@ -330,6 +366,7 @@ def _load_all_result_records_sync(
     sort_by: str,
     sort_order: str,
     include_hidden: bool,
+    include_unavailable: bool,
 ) -> list[dict]:
     bootstrap_sqlite_storage()
     with sqlite_connection() as conn:
@@ -341,6 +378,7 @@ def _load_all_result_records_sync(
             sort_by=sort_by,
             sort_order=sort_order,
             include_hidden=include_hidden,
+            include_unavailable=include_unavailable,
         )
 
 
@@ -373,6 +411,7 @@ def _load_result_summary_sync(filename: str) -> dict | None:
             sort_by="crawl_time",
             sort_order="desc",
             include_hidden=False,
+            include_unavailable=False,
         )
     if not visible_records:
         return None
@@ -465,6 +504,7 @@ def load_visible_result_item_ids(filename: str) -> set[str]:
             sort_by="crawl_time",
             sort_order="desc",
             include_hidden=False,
+            include_unavailable=False,
         )
     item_ids: set[str] = set()
     for record in visible_records:
@@ -473,3 +513,63 @@ def load_visible_result_item_ids(filename: str) -> set[str]:
         if item_id:
             item_ids.add(item_id)
     return item_ids
+
+
+def _normalize_item_id(value) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+async def load_sale_check_candidates(limit: int, lookback_days: int) -> list[dict]:
+    return await asyncio.to_thread(_load_sale_check_candidates_sync, limit, lookback_days)
+
+
+def _load_sale_check_candidates_sync(limit: int, lookback_days: int) -> list[dict]:
+    bootstrap_sqlite_storage()
+    cutoff = (datetime.now() - timedelta(days=max(lookback_days, 1))).isoformat(
+        timespec="seconds"
+    )
+    with sqlite_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT item_id, MAX(link) AS link
+            FROM result_items
+            WHERE is_recommended = 1
+              AND sale_status IN (?, ?)
+              AND item_id IS NOT NULL
+              AND item_id != ''
+              AND crawl_time >= ?
+            GROUP BY item_id
+            ORDER BY COALESCE(MAX(sale_checked_at), '') ASC,
+                     MAX(crawl_time) DESC
+            LIMIT ?
+            """,
+            (sale_state.UNKNOWN, sale_state.ON_SALE, cutoff, max(int(limit), 1)),
+        ).fetchall()
+    return [
+        {"item_id": str(row["item_id"]), "link": str(row["link"] or "")}
+        for row in rows
+    ]
+
+
+async def apply_sale_check_results(results: list[dict]) -> int:
+    return await asyncio.to_thread(_apply_sale_check_results_sync, results)
+
+
+def _apply_sale_check_results_sync(results: list[dict]) -> int:
+    bootstrap_sqlite_storage()
+    updated = 0
+    with sqlite_connection() as conn:
+        for result in results:
+            item_id = _normalize_item_id(result.get("item_id"))
+            sale_status = str(result.get("sale_status") or "").strip()
+            if not item_id or sale_status not in sale_state.VALID_SALE_STATUSES:
+                continue
+            checked_at = str(result.get("checked_at") or "").strip() or datetime.now().isoformat()
+            cursor = conn.execute(
+                "UPDATE result_items SET sale_status = ?, sale_checked_at = ? WHERE item_id = ?",
+                (sale_status, checked_at, item_id),
+            )
+            updated += max(cursor.rowcount, 0)
+        conn.commit()
+    return updated

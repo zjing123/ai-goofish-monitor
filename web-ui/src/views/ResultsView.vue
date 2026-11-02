@@ -8,6 +8,7 @@ import ResultsInsightsPanel from '@/components/results/ResultsInsightsPanel.vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toast'
+import * as resultsApi from '@/api/results'
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,22 @@ const deleteConfirmText = computed(() => {
     ? t('results.filters.deleteDialogWithTask', { task: selectedTaskLabel.value })
     : t('results.filters.deleteDialogFallback')
 })
+
+async function handleSaleCheck() {
+  try {
+    await resultsApi.triggerSaleCheck()
+    toast({
+      title: t('results.filters.saleCheckStarted'),
+      description: t('results.filters.saleCheckHint'),
+    })
+  } catch (e) {
+    toast({
+      title: t('results.filters.saleCheckFailed'),
+      description: (e as Error).message,
+      variant: 'destructive',
+    })
+  }
+}
 
 function openDeleteDialog() {
   if (!selectedFile.value) {
@@ -146,11 +163,13 @@ async function handleSaveBlacklistRules() {
       v-model:aiRecommendedOnly="filters.ai_recommended_only"
       v-model:keywordRecommendedOnly="filters.keyword_recommended_only"
       v-model:includeHidden="filters.include_hidden"
+      v-model:includeUnavailable="filters.include_unavailable"
       v-model:sortBy="filters.sort_by"
       v-model:sortOrder="filters.sort_order"
       :is-loading="isLoading"
       @refresh="refreshResults"
       @manage-blacklist="openBlacklistDialog"
+      @check-sales="handleSaleCheck"
       @export="handleExportResults"
       @delete="openDeleteDialog"
     />

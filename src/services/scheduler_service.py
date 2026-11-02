@@ -2,6 +2,7 @@
 调度服务
 负责管理定时任务的调度
 """
+import os
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import List
@@ -9,6 +10,9 @@ from typing import List
 from src.core.cron_utils import build_cron_trigger
 from src.domain.models.task import Task
 from src.services.process_service import ProcessService
+
+
+SALE_CHECK_JOB_ID = "system:sale_check"
 
 
 class SchedulerService:
@@ -23,6 +27,7 @@ class SchedulerService:
         if not self.scheduler.running:
             self.scheduler.start()
             print("调度器已启动")
+            self._ensure_sale_check_job()
 
     def stop(self):
         """停止调度器"""
@@ -52,7 +57,9 @@ class SchedulerService:
     async def reload_jobs(self, tasks: List[Task]):
         """重新加载所有定时任务"""
         print("正在重新加载定时任务...")
-        self.scheduler.remove_all_jobs()
+        for job in self.scheduler.get_jobs():
+            if job.id.startswith("task_"):
+                self.scheduler.remove_job(job.id)
 
         for task in tasks:
             if task.enabled and task.cron:
@@ -75,7 +82,58 @@ class SchedulerService:
 
         print("定时任务加载完成")
 
+    def _ensure_sale_check_job(self) -> None:
+        """注册商品售卖状态巡检的后台任务（不受任务重载影响）。"""
+        if os.getenv("SALE_CHECK_ENABLED", "true").strip().lower() == "false":
+            print("商品状态巡检已禁用 (SALE_CHECK_ENABLED=false)")
+            return
+        cron = os.getenv("SALE_CHECK_CRON", "0 */2 * * *").strip()
+        try:
+            trigger = build_cron_trigger(cron, timezone=self.scheduler.timezone)
+        except ValueError as exc:
+            print(f"[警告] SALE_CHECK_CRON 无效: {cron} ({exc})")
+            return
+        self.scheduler.add_job(
+            self._run_sale_check,
+            trigger=trigger,
+            id=SALE_CHECK_JOB_ID,
+            name="System: sale check",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        print(f"已启用商品状态巡检: '{cron}'")
+
+    def _has_running_tasks(self) -> bool:
+        return any(
+            process.returncode is None
+            for process in self.process_service.processes.values()
+        )
+
+    async def _run_sale_check(self) -> None:
+        if self._has_running_tasks():
+            print("有爬虫任务正在运行，跳过本轮商品状态巡检")
+            return
+
+        limit = _positive_int(os.getenv("SALE_CHECK_BATCH_SIZE"), 40)
+        lookback_days = _positive_int(os.getenv("SALE_CHECK_LOOKBACK_DAYS"), 7)
+
+        from src.services.sale_check_service import spawn_sale_check
+
+        pid = await spawn_sale_check(limit, lookback_days)
+        if pid is None:
+            print("已有商品状态巡检在运行，跳过本轮")
+            return
+        print(f"商品状态巡检已启动 (PID: {pid})")
+
     async def _run_task(self, task_id: int, task_name: str):
         """执行定时任务"""
         print(f"定时任务触发: 正在为任务 '{task_name}' 启动爬虫...")
         await self.process_service.start_task(task_id, task_name)
+
+
+def _positive_int(raw: str | None, default: int) -> int:
+    text = str(raw or "").strip()
+    if text.isdigit() and int(text) > 0:
+        return int(text)
+    return default

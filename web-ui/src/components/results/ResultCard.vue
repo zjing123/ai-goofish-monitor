@@ -48,6 +48,16 @@ const hiddenLabel = computed(() => {
   if (props.item._hidden_reason === 'expired') return t('results.card.expired')
   return t('results.card.hidden')
 })
+const saleBadge = computed(() => {
+  const status = props.item._listing_status
+  if (status === 'sold') {
+    return { label: t('results.card.sold'), class: 'bg-slate-900/80 text-white' }
+  }
+  if (status === 'delisted') {
+    return { label: t('results.card.delisted'), class: 'bg-rose-600/85 text-white' }
+  }
+  return null
+})
 
 const expanded = ref(false)
 </script>
@@ -75,6 +85,9 @@ const expanded = ref(false)
         </Badge>
         <Badge v-if="isRuleHidden" variant="secondary" class="bg-slate-900/75 text-white border-none backdrop-blur-md shadow-sm">
           {{ t('results.card.blacklisted') }}
+        </Badge>
+        <Badge v-if="saleBadge" variant="secondary" class="border-none backdrop-blur-md shadow-sm" :class="saleBadge.class">
+          {{ saleBadge.label }}
         </Badge>
       </div>
       <div class="absolute top-3 right-3 flex gap-1.5">

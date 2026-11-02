@@ -66,6 +66,8 @@ SCHEMA_STATEMENTS = (
         analysis_source TEXT,
         keyword_hit_count INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'active',
+        sale_status TEXT NOT NULL DEFAULT 'unknown',
+        sale_checked_at TEXT,
         raw_json TEXT NOT NULL,
         UNIQUE(result_filename, link_unique_key)
     )
@@ -144,6 +146,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         conn.execute(statement)
     _migrate_result_items_status(conn)
+    _migrate_result_items_sale_status(conn)
     _migrate_tasks_blacklist_keywords(conn)
     conn.commit()
 
@@ -185,6 +188,29 @@ def _migrate_result_items_status(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_results_filename_status_crawl"
         " ON result_items(result_filename, status, crawl_time DESC)"
+    )
+
+
+def _migrate_result_items_sale_status(conn: sqlite3.Connection) -> None:
+    """为 result_items 表添加商品售卖状态列（仅执行一次）。"""
+    row = conn.execute(
+        "SELECT value FROM app_metadata WHERE key = 'migration:result_items_sale_status'"
+    ).fetchone()
+    if row is not None:
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(result_items)").fetchall()]
+    if "sale_status" not in cols:
+        conn.execute(
+            "ALTER TABLE result_items ADD COLUMN sale_status TEXT NOT NULL DEFAULT 'unknown'"
+        )
+    if "sale_checked_at" not in cols:
+        conn.execute("ALTER TABLE result_items ADD COLUMN sale_checked_at TEXT")
+    conn.execute(
+        "INSERT OR REPLACE INTO app_metadata(key, value) VALUES ('migration:result_items_sale_status', 'done')"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_results_sale_status"
+        " ON result_items(sale_status, sale_checked_at)"
     )
 
 

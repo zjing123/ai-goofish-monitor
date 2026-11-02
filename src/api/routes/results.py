@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from urllib.parse import quote
 
 from src.services.price_history_service import build_price_history_insights
@@ -88,6 +88,7 @@ async def get_result_file_content(
     ai_recommended_only: bool = Query(False),
     keyword_recommended_only: bool = Query(False),
     include_hidden: bool = Query(False),
+    include_unavailable: bool = Query(False),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -109,6 +110,7 @@ async def get_result_file_content(
             page=page,
             limit=limit,
             include_hidden=include_hidden,
+            include_unavailable=include_unavailable,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -144,6 +146,7 @@ async def export_result_file_content(
     ai_recommended_only: bool = Query(False),
     keyword_recommended_only: bool = Query(False),
     include_hidden: bool = Query(False),
+    include_unavailable: bool = Query(False),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -161,6 +164,7 @@ async def export_result_file_content(
             sort_by=sort_by,
             sort_order=sort_order,
             include_hidden=include_hidden,
+            include_unavailable=include_unavailable,
         )
         csv_text = build_results_csv(
             enrich_records_with_price_insight(results, filename)
@@ -185,6 +189,23 @@ class ItemStatus(str, Enum):
 
 class UpdateStatusRequest(BaseModel):
     status: ItemStatus
+
+
+class SaleCheckRequest(BaseModel):
+    limit: int = Field(40, ge=1, le=500)
+    lookback_days: int = Field(7, ge=1, le=90)
+
+
+@router.post("/sale-check", status_code=202)
+async def trigger_sale_check(body: SaleCheckRequest | None = None):
+    """手动触发一轮推荐商品售卖状态巡检。"""
+    from src.services.sale_check_service import spawn_sale_check
+
+    payload = body or SaleCheckRequest()
+    pid = await spawn_sale_check(payload.limit, payload.lookback_days)
+    if pid is None:
+        raise HTTPException(status_code=409, detail="已有巡检任务正在运行")
+    return {"message": "已开始巡检商品状态", "pid": pid}
 
 
 class BlacklistRulesRequest(BaseModel):
