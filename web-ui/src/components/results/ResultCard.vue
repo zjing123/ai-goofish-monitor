@@ -113,7 +113,7 @@ const expanded = ref(false)
         <span class="text-white/80 text-xs font-semibold uppercase tracking-wider">{{ hiddenLabel }}</span>
       </div>
       <!-- Overlays -->
-      <div class="absolute top-3 left-3 flex gap-2">
+      <div class="absolute top-3 left-3 flex items-center gap-2">
         <Badge v-if="isRecommended && !isHidden" variant="default" class="bg-emerald-500/90 backdrop-blur-md border-none shadow-sm">
           {{ t('results.card.curated') }}
         </Badge>
