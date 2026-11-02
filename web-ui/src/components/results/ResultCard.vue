@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ResultItem } from '@/types/result.d.ts'
 import {
@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import Badge from '@/components/ui/badge/Badge.vue'
-import { ExternalLink, TrendingUp, TrendingDown, Info, User, Clock, CheckCircle2, XCircle, AlertCircle, EyeOff, Eye } from 'lucide-vue-next'
+import { ExternalLink, TrendingUp, TrendingDown, Info, User, Clock, CheckCircle2, XCircle, AlertCircle, EyeOff, Eye, ChevronDown, Check } from 'lucide-vue-next'
 import { formatDateTime } from '@/i18n'
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'toggle-block', item: ResultItem): void
+  (e: 'update-sale-status', item: ResultItem, saleStatus: string): void
 }>()
 const { t } = useI18n()
 
@@ -48,15 +49,48 @@ const hiddenLabel = computed(() => {
   if (props.item._hidden_reason === 'expired') return t('results.card.expired')
   return t('results.card.hidden')
 })
+const saleStatusOptions = computed(() => ([
+  { value: 'on_sale', label: t('results.card.onSale'), class: 'bg-emerald-500/90 text-white' },
+  { value: 'sold', label: t('results.card.sold'), class: 'bg-slate-900/80 text-white' },
+  { value: 'delisted', label: t('results.card.delisted'), class: 'bg-rose-600/85 text-white' },
+  { value: 'unknown', label: t('results.card.unknownStatus'), class: 'bg-slate-500/80 text-white' },
+]))
+
 const saleBadge = computed(() => {
   const status = props.item._listing_status
-  if (status === 'sold') {
-    return { label: t('results.card.sold'), class: 'bg-slate-900/80 text-white' }
+  const found = saleStatusOptions.value.find((option) => option.value === status)
+  if (found) return found
+  return saleStatusOptions.value.find((option) => option.value === 'unknown') || null
+})
+
+const isSaleMenuOpen = ref(false)
+const saleMenuRef = ref<HTMLElement | null>(null)
+
+function toggleSaleMenu() {
+  isSaleMenuOpen.value = !isSaleMenuOpen.value
+}
+
+function closeSaleMenu() {
+  isSaleMenuOpen.value = false
+}
+
+function selectSaleStatus(status: string) {
+  closeSaleMenu()
+  if (status !== props.item._listing_status) {
+    emit('update-sale-status', props.item, status)
   }
-  if (status === 'delisted') {
-    return { label: t('results.card.delisted'), class: 'bg-rose-600/85 text-white' }
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  if (isSaleMenuOpen.value && saleMenuRef.value && !saleMenuRef.value.contains(event.target as Node)) {
+    closeSaleMenu()
   }
-  return null
+}
+
+onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown))
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
+  closeSaleMenu()
 })
 
 const expanded = ref(false)
@@ -86,9 +120,35 @@ const expanded = ref(false)
         <Badge v-if="isRuleHidden" variant="secondary" class="bg-slate-900/75 text-white border-none backdrop-blur-md shadow-sm">
           {{ t('results.card.blacklisted') }}
         </Badge>
-        <Badge v-if="saleBadge" variant="secondary" class="border-none backdrop-blur-md shadow-sm" :class="saleBadge.class">
-          {{ saleBadge.label }}
-        </Badge>
+        <div v-if="saleBadge" ref="saleMenuRef" class="relative">
+          <button
+            type="button"
+            @click.stop="toggleSaleMenu"
+            :title="t('results.card.markSaleStatus')"
+            :aria-label="t('results.card.markSaleStatus')"
+            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border-none backdrop-blur-md shadow-sm transition-transform hover:scale-105 cursor-pointer"
+            :class="saleBadge.class"
+          >
+            {{ saleBadge.label }}
+            <ChevronDown class="w-3 h-3 opacity-80" />
+          </button>
+          <div
+            v-if="isSaleMenuOpen"
+            class="absolute top-full left-0 mt-1 z-20 min-w-[110px] rounded-lg border border-slate-200 bg-white shadow-lg py-1"
+          >
+            <button
+              v-for="option in saleStatusOptions"
+              :key="option.value"
+              type="button"
+              @click.stop="selectSaleStatus(option.value)"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              <span class="inline-block w-2 h-2 rounded-full shrink-0" :class="option.class.split(' ')[0]"></span>
+              {{ option.label }}
+              <Check v-if="option.value === props.item._listing_status" class="w-3 h-3 ml-auto text-slate-400" />
+            </button>
+          </div>
+        </div>
       </div>
       <div class="absolute top-3 right-3 flex gap-1.5">
         <button

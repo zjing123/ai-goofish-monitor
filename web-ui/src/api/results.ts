@@ -74,6 +74,14 @@ export async function updateItemStatus(filename: string, itemId: string, status:
   })
 }
 
+export async function updateItemSaleStatus(filename: string, itemId: string, saleStatus: string): Promise<{ message: string; sale_status: string }> {
+  return await http(`/api/results/${filename}/items/${itemId}/sale-status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sale_status: saleStatus }),
+  })
+}
+
 export async function triggerSaleCheck(payload: { limit?: number; lookback_days?: number } = {}): Promise<{ message: string; pid: number }> {
   return await http('/api/results/sale-check', {
     method: 'POST',

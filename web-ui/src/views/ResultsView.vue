@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { ResultItem } from '@/types/result.d.ts'
 import { useResults } from '@/composables/useResults'
 import ResultsFilterBar from '@/components/results/ResultsFilterBar.vue'
 import ResultsGrid from '@/components/results/ResultsGrid.vue'
@@ -32,6 +33,7 @@ const {
   exportSelectedResults,
   deleteSelectedFile,
   toggleItemBlock,
+  updateItemSaleStatus,
   blacklistKeywords,
   isSavingBlacklist,
   saveBlacklistRules,
@@ -55,6 +57,19 @@ const deleteConfirmText = computed(() => {
     ? t('results.filters.deleteDialogWithTask', { task: selectedTaskLabel.value })
     : t('results.filters.deleteDialogFallback')
 })
+
+async function handleUpdateSaleStatus(item: ResultItem, saleStatus: string) {
+  try {
+    await updateItemSaleStatus(item, saleStatus)
+    toast({ title: t('results.filters.saleStatusUpdated') })
+  } catch (e) {
+    toast({
+      title: t('results.filters.saleStatusUpdateFailed'),
+      description: (e as Error).message,
+      variant: 'destructive',
+    })
+  }
+}
 
 async function handleSaleCheck() {
   try {
@@ -176,7 +191,7 @@ async function handleSaveBlacklistRules() {
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
 
-    <ResultsGrid :results="results" :is-loading="isLoading" @toggle-block="toggleItemBlock" />
+    <ResultsGrid :results="results" :is-loading="isLoading" @toggle-block="toggleItemBlock" @update-sale-status="handleUpdateSaleStatus" />
 
     <Dialog v-model:open="isDeleteDialogOpen">
       <DialogContent class="sm:max-w-[420px]">

@@ -25,6 +25,7 @@ from src.services.result_storage_service import (
     result_file_exists,
     save_result_blacklist_keywords,
     update_item_status,
+    update_item_sale_status,
 )
 
 
@@ -191,6 +192,17 @@ class UpdateStatusRequest(BaseModel):
     status: ItemStatus
 
 
+class SaleStatus(str, Enum):
+    UNKNOWN = "unknown"
+    ON_SALE = "on_sale"
+    SOLD = "sold"
+    DELISTED = "delisted"
+
+
+class UpdateSaleStatusRequest(BaseModel):
+    sale_status: SaleStatus
+
+
 class SaleCheckRequest(BaseModel):
     limit: int = Field(40, ge=1, le=500)
     lookback_days: int = Field(7, ge=1, le=90)
@@ -223,6 +235,19 @@ async def patch_item_status(filename: str, item_id: str, body: UpdateStatusReque
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"message": "状态已更新", "status": body.status.value}
+
+
+@router.patch("/{filename}/items/{item_id}/sale-status")
+async def patch_item_sale_status(filename: str, item_id: str, body: UpdateSaleStatusRequest):
+    """手动更新指定商品的售卖状态（unknown/on_sale/sold/delisted）"""
+    try:
+        validate_result_filename(filename)
+        updated = await update_item_sale_status(filename, item_id, body.sale_status.value)
+        if not updated:
+            raise HTTPException(status_code=404, detail="商品未找到")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"message": "售卖状态已更新", "sale_status": body.sale_status.value}
 
 
 @router.get("/{filename}/blacklist-rules")

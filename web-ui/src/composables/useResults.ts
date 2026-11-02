@@ -234,6 +234,18 @@ export function useResults() {
     }
   }
 
+  async function updateItemSaleStatus(item: ResultItem, saleStatus: string) {
+    if (!selectedFile.value) return
+    const itemId = item.商品信息?.商品ID
+    if (!itemId) return
+    try {
+      await resultsApi.updateItemSaleStatus(selectedFile.value, itemId, saleStatus)
+      await fetchResults()
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+    }
+  }
+
   async function saveBlacklistRules(keywords: string[]) {
     if (!selectedFile.value) return
     isSavingBlacklist.value = true
@@ -308,6 +320,7 @@ export function useResults() {
     exportSelectedResults,
     deleteSelectedFile,
     toggleItemBlock,
+    updateItemSaleStatus,
     blacklistKeywords,
     isSavingBlacklist,
     saveBlacklistRules,
