@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 from datetime import datetime, timedelta
 
 from src.domain import sale_status as sale_state
@@ -526,7 +527,17 @@ async def load_sale_check_candidates(limit: int, lookback_days: int) -> list[dic
 
 def _load_sale_check_candidates_sync(limit: int, lookback_days: int) -> list[dict]:
     bootstrap_sqlite_storage()
-    cutoff = (datetime.now() - timedelta(days=max(lookback_days, 1))).isoformat(
+    now = datetime.now()
+    cutoff = (now - timedelta(days=max(lookback_days, 1))).isoformat(
+        timespec="seconds"
+    )
+    # Skip items probed recently so unknown/on-sale candidates are not
+    # re-fetched on every scheduled run.
+    try:
+        recheck_hours = max(float(os.getenv("SALE_CHECK_RECHECK_HOURS", "12")), 0.0)
+    except ValueError:
+        recheck_hours = 12.0
+    recheck_cutoff = (now - timedelta(hours=recheck_hours)).isoformat(
         timespec="seconds"
     )
     with sqlite_connection() as conn:
@@ -540,16 +551,47 @@ def _load_sale_check_candidates_sync(limit: int, lookback_days: int) -> list[dic
               AND item_id != ''
               AND crawl_time >= ?
             GROUP BY item_id
+            HAVING COALESCE(MAX(sale_checked_at), '') < ?
             ORDER BY COALESCE(MAX(sale_checked_at), '') ASC,
                      MAX(crawl_time) DESC
             LIMIT ?
             """,
-            (sale_state.UNKNOWN, sale_state.ON_SALE, cutoff, max(int(limit), 1)),
+            (
+                sale_state.UNKNOWN,
+                sale_state.ON_SALE,
+                cutoff,
+                recheck_cutoff,
+                max(int(limit), 1),
+            ),
         ).fetchall()
     return [
         {"item_id": str(row["item_id"]), "link": str(row["link"] or "")}
         for row in rows
     ]
+
+
+async def update_item_sale_status(filename: str, item_id: str, sale_status: str) -> bool:
+    return await asyncio.to_thread(
+        _update_item_sale_status_sync, filename, item_id, sale_status
+    )
+
+
+def _update_item_sale_status_sync(filename: str, item_id: str, sale_status: str) -> bool:
+    if sale_status not in sale_state.VALID_SALE_STATUSES:
+        raise ValueError(f"sale_status must be one of {sorted(sale_state.VALID_SALE_STATUSES)}")
+    bootstrap_sqlite_storage()
+    now = datetime.now().isoformat(timespec="seconds")
+    with sqlite_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE result_items
+            SET sale_status = ?, sale_checked_at = ?
+            WHERE result_filename = ? AND item_id = ?
+            """,
+            (sale_status, now, filename, item_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 async def apply_sale_check_results(results: list[dict]) -> int:

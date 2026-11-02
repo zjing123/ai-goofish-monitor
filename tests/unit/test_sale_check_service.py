@@ -32,6 +32,22 @@ def test_classify_falls_back_to_page_text():
     assert classify_sale_state(payload, "宝贝被删掉了")[0] == sale_state.DELISTED
 
 
+def test_classify_sold_from_string_item_status_code():
+    payload = {
+        "ret": ["SUCCESS::调用成功"],
+        "data": {"itemDO": {"itemStatus": "1"}},
+    }
+    assert classify_sale_state(payload, "") == (sale_state.SOLD, "itemStatus=1")
+
+
+def test_classify_ignores_invalid_item_status_code():
+    payload = {
+        "ret": ["SUCCESS::调用成功"],
+        "data": {"itemDO": {"itemStatus": "abc"}},
+    }
+    assert classify_sale_state(payload, "")[0] == sale_state.UNKNOWN
+
+
 def test_classify_unknown_without_signal():
     assert classify_sale_state(None, "")[0] == sale_state.UNKNOWN
 

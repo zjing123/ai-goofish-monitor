@@ -23,7 +23,10 @@ from src.services.result_storage_service import (
     load_sale_check_candidates,
 )
 
-SALE_CHECK_LOG_PATH = "logs/sale_check.log"
+# Anchor paths to the repo root so the service works regardless of CWD.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SALE_CHECK_SCRIPT_PATH = os.path.join(_REPO_ROOT, "check_sales.py")
+SALE_CHECK_LOG_PATH = os.path.join(_REPO_ROOT, "logs", "sale_check.log")
 DETAIL_RESPONSE_MARKER = "mtop.taobao.idle.pc.detail"
 ITEM_URL_TEMPLATE = "https://www.goofish.com/item?id={item_id}"
 HOME_URL = "https://www.goofish.com/"
@@ -59,6 +62,17 @@ def extract_item_id(item_id: str | None, link: str | None) -> str | None:
     return None
 
 
+def _normalize_item_status_code(value) -> int | None:
+    """Accept itemStatus as int or numeric string ("0"/"1"/"2")."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return None
+
+
 def classify_sale_state(
     detail_payload: dict | None,
     page_text: str = "",
@@ -77,8 +91,8 @@ def classify_sale_state(
     data = detail_payload.get("data") or {}
     item_do = data.get("itemDO") or {}
 
-    code = item_do.get("itemStatus")
-    if isinstance(code, int) and not isinstance(code, bool):
+    code = _normalize_item_status_code(item_do.get("itemStatus"))
+    if code is not None:
         mapped = sale_state.ITEM_STATUS_CODE_MAP.get(code)
         if mapped is not None:
             return mapped, f"itemStatus={code}"
@@ -262,7 +276,8 @@ async def run_sale_check(
 
     updated = 0
     if not dry_run and results:
-        # 未知状态也写入 checked_at，避免同一批商品被反复巡检。
+        # 未知状态也写入 checked_at；候选查询通过 SALE_CHECK_RECHECK_HOURS
+        # 冷却窗口避免同一批商品被反复巡检。
         updated = await apply_sale_check_results(results)
 
     summary = {
@@ -297,7 +312,7 @@ async def spawn_sale_check(limit: int, lookback_days: int) -> int | None:
     command = [
         sys.executable,
         "-u",
-        "check_sales.py",
+        SALE_CHECK_SCRIPT_PATH,
         "--limit",
         str(limit),
         "--lookback-days",
@@ -306,6 +321,7 @@ async def spawn_sale_check(limit: int, lookback_days: int) -> int | None:
     try:
         _active_process = await asyncio.create_subprocess_exec(
             *command,
+            cwd=_REPO_ROOT,
             stdout=log_handle,
             stderr=log_handle,
         )
