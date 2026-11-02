@@ -1,7 +1,7 @@
 import asyncio
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -122,3 +122,58 @@ def test_sale_check_candidates_skip_sold_and_apply_results(tmp_path, monkeypatch
     resp = client.get(f"/api/results/{FILENAME}", params={"include_unavailable": True})
     by_id = {item["商品信息"]["商品ID"]: item for item in resp.json()["items"]}
     assert by_id["1002"]["_listing_status"] == "delisted"
+
+
+def test_manual_sale_status_override(tmp_path, monkeypatch):
+    client, _db_path = _prepare(tmp_path, monkeypatch)
+    client.get(f"/api/results/{FILENAME}")
+
+    resp = client.patch(
+        f"/api/results/{FILENAME}/items/1001/sale-status",
+        json={"sale_status": "sold"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["sale_status"] == "sold"
+
+    listing = client.get(f"/api/results/{FILENAME}", params={"include_unavailable": True})
+    by_id = {item["商品信息"]["商品ID"]: item for item in listing.json()["items"]}
+    assert by_id["1001"]["_listing_status"] == "sold"
+
+    invalid = client.patch(
+        f"/api/results/{FILENAME}/items/1001/sale-status",
+        json={"sale_status": "not-a-status"},
+    )
+    assert invalid.status_code == 422
+
+    missing = client.patch(
+        f"/api/results/{FILENAME}/items/9999/sale-status",
+        json={"sale_status": "sold"},
+    )
+    assert missing.status_code == 404
+
+
+def test_sale_check_recheck_cooldown(tmp_path, monkeypatch):
+    from src.services.result_storage_service import load_sale_check_candidates
+
+    monkeypatch.setenv("SALE_CHECK_RECHECK_HOURS", "12")
+    client, db_path = _prepare(tmp_path, monkeypatch)
+    client.get(f"/api/results/{FILENAME}")
+
+    now = datetime.now()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE result_items SET sale_status = ?, sale_checked_at = ? WHERE item_id = ?",
+            ("on_sale", now.isoformat(), "1001"),
+        )
+        conn.execute(
+            "UPDATE result_items SET sale_status = ?, sale_checked_at = ? WHERE item_id = ?",
+            ("on_sale", (now - timedelta(hours=13)).isoformat(), "1002"),
+        )
+        conn.commit()
+
+    candidate_ids = {
+        candidate["item_id"]
+        for candidate in asyncio.run(load_sale_check_candidates(limit=10, lookback_days=7))
+    }
+    assert "1001" not in candidate_ids
+    assert "1002" in candidate_ids

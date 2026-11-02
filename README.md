@@ -214,7 +214,7 @@ cd web-ui && npm run build
 ### 商品状态巡检
 
 - SALE_CHECK_ENABLED：是否启用定时巡检，默认 true
-- SALE_CHECK_CRON：巡检 Cron，默认 0 */2 * * *（每 2 小时）
+- SALE_CHECK_CRON：巡检 Cron，默认 20 */2 * * *（每 2 小时，避开整点任务）
 - SALE_CHECK_BATCH_SIZE：单轮最多巡检条数，默认 40
 - SALE_CHECK_LOOKBACK_DAYS：只巡检最近 N 天抓到的推荐商品，默认 7
 

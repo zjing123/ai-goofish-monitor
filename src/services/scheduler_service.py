@@ -87,7 +87,7 @@ class SchedulerService:
         if os.getenv("SALE_CHECK_ENABLED", "true").strip().lower() == "false":
             print("商品状态巡检已禁用 (SALE_CHECK_ENABLED=false)")
             return
-        cron = os.getenv("SALE_CHECK_CRON", "0 */2 * * *").strip()
+        cron = os.getenv("SALE_CHECK_CRON", "20 */2 * * *").strip()
         try:
             trigger = build_cron_trigger(cron, timezone=self.scheduler.timezone)
         except ValueError as exc:

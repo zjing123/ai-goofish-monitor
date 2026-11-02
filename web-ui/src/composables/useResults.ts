@@ -243,6 +243,7 @@ export function useResults() {
       await fetchResults()
     } catch (e) {
       if (e instanceof Error) error.value = e
+      throw e
     }
   }
 
