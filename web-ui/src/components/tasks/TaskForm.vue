@@ -10,11 +10,11 @@ import { toast } from '@/components/ui/toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TaskRegionSelector from '@/components/tasks/TaskRegionSelector.vue'
+import { EMPTY_CRON_VALUE, useCronPresets } from '@/composables/useCronPresets'
 
 type FormMode = 'create' | 'edit'
 type EmittedData = TaskGenerateRequest | Partial<Task>
 const AUTO_ACCOUNT_VALUE = '__auto__'
-const EMPTY_CRON_VALUE = '__manual__'
 
 const props = defineProps<{
   mode: FormMode
@@ -36,23 +36,8 @@ const keywordRulesInput = ref('')
 const blacklistInput = ref('')
 const cronMode = ref<'preset' | 'custom'>('preset')
 
-// 常用 cron 预设选项
-const cronPresets = computed(() => [
-  { value: EMPTY_CRON_VALUE, label: t('tasks.form.cron.manual') },
-  { value: '*/5 * * * *', label: t('tasks.form.cron.every5Minutes') },
-  { value: '*/15 * * * *', label: t('tasks.form.cron.every15Minutes') },
-  { value: '*/30 * * * *', label: t('tasks.form.cron.every30Minutes') },
-  { value: '0 * * * *', label: t('tasks.form.cron.hourly') },
-  { value: '0 */2 * * *', label: t('tasks.form.cron.every2Hours') },
-  { value: '0 */6 * * *', label: t('tasks.form.cron.every6Hours') },
-  { value: '0 8 * * *', label: t('tasks.form.cron.daily8') },
-  { value: '0 12 * * *', label: t('tasks.form.cron.daily12') },
-  { value: '0 18 * * *', label: t('tasks.form.cron.daily18') },
-  { value: '0 20 * * *', label: t('tasks.form.cron.daily20') },
-  { value: '0 8,12,18 * * *', label: t('tasks.form.cron.daily81218') },
-  { value: '0 9 * * 1-5', label: t('tasks.form.cron.weekday9') },
-  { value: '0 10 * * 6,0', label: t('tasks.form.cron.weekend10') },
-])
+// 常用 cron 预设选项（与巡检设置共用）
+const cronPresets = useCronPresets()
 
 // 判断 cron 值是否为预设值
 function isPresetCronValue(value: string): boolean {

@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { formatDateTime } from '@/i18n'
 import type { SaleCheckSettings } from '@/api/settings'
 import { getSaleCheckLog } from '@/api/settings'
 import { triggerSaleCheck } from '@/api/results'
+import { EMPTY_CRON_VALUE, useCronPresets } from '@/composables/useCronPresets'
 
 const props = defineProps<{
   settings: SaleCheckSettings
@@ -24,6 +27,40 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Reuse the task form's preset/custom cron pattern and preset options.
+const cronMode = ref<'preset' | 'custom'>('preset')
+
+const allCronPresets = useCronPresets()
+// The sale check job has its own enable switch, so drop the manual option.
+const cronPresets = computed(() =>
+  allCronPresets.value.filter((preset) => preset.value !== EMPTY_CRON_VALUE)
+)
+
+const isPresetCron = computed(() =>
+  cronPresets.value.some((preset) => preset.value === props.settings.SALE_CHECK_CRON)
+)
+
+// Default to the matching tab when the loaded cron is not a preset value.
+watch(
+  () => props.settings.SALE_CHECK_CRON,
+  () => {
+    cronMode.value = isPresetCron.value ? 'preset' : 'custom'
+  },
+  { immediate: true }
+)
+
+const DEFAULT_CRON = '0 */2 * * *'
+
+const presetCronValue = computed({
+  get: () => {
+    if (isPresetCron.value) return props.settings.SALE_CHECK_CRON
+    return cronPresets.value.find((preset) => preset.value === DEFAULT_CRON)?.value ?? DEFAULT_CRON
+  },
+  set: (value: string) => {
+    props.settings.SALE_CHECK_CRON = value
+  },
+})
 
 const logLines = ref<string[]>([])
 const logUpdatedAt = ref<string | null>(null)
@@ -118,8 +155,29 @@ onBeforeUnmount(() => {
         <div class="grid gap-4 lg:grid-cols-2">
           <div class="grid gap-2">
             <Label>{{ t('settings.saleCheck.cron') }}</Label>
-            <Input v-model="settings.SALE_CHECK_CRON" placeholder="20 */2 * * *" />
-            <p class="text-xs text-slate-500">{{ t('settings.saleCheck.cronHint') }}</p>
+            <Tabs v-model="cronMode" class="w-full">
+              <TabsList class="grid w-full grid-cols-2">
+                <TabsTrigger value="preset">{{ t('tasks.form.cronPresetTab') }}</TabsTrigger>
+                <TabsTrigger value="custom">{{ t('tasks.form.cronCustomTab') }}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="preset">
+                <Select v-model="presetCronValue">
+                  <SelectTrigger class="w-full">
+                    <SelectValue :placeholder="t('settings.saleCheck.cronPlaceholder')" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="preset in cronPresets" :key="preset.value" :value="preset.value">
+                      {{ preset.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="mt-1 text-xs text-slate-500">{{ t('settings.saleCheck.cronPresetHint') }}</p>
+              </TabsContent>
+              <TabsContent value="custom">
+                <Input v-model="settings.SALE_CHECK_CRON" placeholder="20 */2 * * *" />
+                <p class="mt-1 text-xs text-slate-500">{{ t('settings.saleCheck.cronHint') }}</p>
+              </TabsContent>
+            </Tabs>
           </div>
           <div class="grid gap-2">
             <Label>{{ t('settings.saleCheck.nextRun') }}</Label>

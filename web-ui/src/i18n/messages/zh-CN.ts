@@ -280,6 +280,8 @@ const zhCN = {
       enableHint: '关闭后不再自动巡检，手动按钮仍可使用。',
       cron: '执行周期（Cron）',
       cronHint: '5 段 Cron，默认 20 */2 * * *，避开整点任务。',
+      cronPlaceholder: '选择执行周期',
+      cronPresetHint: '选择常用周期，或切换到“自定义”填写 Cron 表达式。',
       nextRun: '下次执行',
       neverRun: '未安排',
       running: '运行中',

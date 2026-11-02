@@ -280,6 +280,8 @@ const enUS = {
       enableHint: 'When off, only the manual button runs a check.',
       cron: 'Schedule (Cron)',
       cronHint: '5-field cron; default 20 */2 * * * avoids task start times.',
+      cronPlaceholder: 'Choose a schedule',
+      cronPresetHint: 'Pick a common interval, or switch to Custom to enter a cron expression.',
       nextRun: 'Next run',
       neverRun: 'Not scheduled',
       running: 'Running',
