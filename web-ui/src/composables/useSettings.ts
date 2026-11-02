@@ -6,6 +6,8 @@ import type {
   NotificationTestResponse,
   AiSettings,
   RotationSettings,
+  SaleCheckSettings,
+  SaleCheckSettingsUpdate,
   SystemStatus
 } from '@/api/settings'
 
@@ -13,6 +15,15 @@ export function useSettings() {
   const notificationSettings = ref<NotificationSettings>({})
   const aiSettings = ref<AiSettings>({})
   const rotationSettings = ref<RotationSettings>({})
+  const saleCheckSettings = ref<SaleCheckSettings>({
+    SALE_CHECK_ENABLED: true,
+    SALE_CHECK_CRON: '20 */2 * * *',
+    SALE_CHECK_BATCH_SIZE: 40,
+    SALE_CHECK_LOOKBACK_DAYS: 7,
+    SALE_CHECK_RECHECK_HOURS: 12,
+    next_run_time: null,
+    is_running: false,
+  })
   const systemStatus = ref<SystemStatus | null>(null)
   const isReady = ref(false)
   
@@ -24,15 +35,17 @@ export function useSettings() {
     isLoading.value = true
     error.value = null
     try {
-      const [notif, ai, rotation, status] = await Promise.all([
+      const [notif, ai, rotation, saleCheck, status] = await Promise.all([
         settingsApi.getNotificationSettings(),
         settingsApi.getAiSettings(),
         settingsApi.getRotationSettings(),
+        settingsApi.getSaleCheckSettings(),
         settingsApi.getSystemStatus()
       ])
       notificationSettings.value = notif
       aiSettings.value = ai
       rotationSettings.value = rotation
+      saleCheckSettings.value = saleCheck
       systemStatus.value = status
     } catch (e) {
       if (e instanceof Error) error.value = e
@@ -124,6 +137,35 @@ export function useSettings() {
     }
   }
 
+  async function saveSaleCheckSettings() {
+    isSaving.value = true
+    try {
+      const payload: SaleCheckSettingsUpdate = {
+        SALE_CHECK_ENABLED: saleCheckSettings.value.SALE_CHECK_ENABLED,
+        SALE_CHECK_CRON: saleCheckSettings.value.SALE_CHECK_CRON,
+        SALE_CHECK_BATCH_SIZE: saleCheckSettings.value.SALE_CHECK_BATCH_SIZE,
+        SALE_CHECK_LOOKBACK_DAYS: saleCheckSettings.value.SALE_CHECK_LOOKBACK_DAYS,
+        SALE_CHECK_RECHECK_HOURS: saleCheckSettings.value.SALE_CHECK_RECHECK_HOURS,
+      }
+      const updated = await settingsApi.updateSaleCheckSettings(payload)
+      saleCheckSettings.value = { ...saleCheckSettings.value, ...updated }
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      throw e
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  async function refreshSaleCheckSettings() {
+    try {
+      saleCheckSettings.value = await settingsApi.getSaleCheckSettings()
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      throw e
+    }
+  }
+
   async function testAiConnection() {
     isSaving.value = true
     try {
@@ -150,6 +192,7 @@ export function useSettings() {
     notificationSettings,
     aiSettings,
     rotationSettings,
+    saleCheckSettings,
     systemStatus,
     isLoading,
     isSaving,
@@ -160,6 +203,8 @@ export function useSettings() {
     testNotification,
     saveAiSettings,
     saveRotationSettings,
+    saveSaleCheckSettings,
+    refreshSaleCheckSettings,
     testAiConnection,
     refreshStatus,
   }

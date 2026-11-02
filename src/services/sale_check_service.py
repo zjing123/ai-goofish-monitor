@@ -11,6 +11,7 @@ import os
 import random
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from playwright.async_api import async_playwright
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -337,3 +338,25 @@ async def spawn_sale_check(limit: int, lookback_days: int) -> int | None:
 
     asyncio.create_task(_wait())
     return process.pid
+
+
+def is_sale_check_running() -> bool:
+    return _active_process is not None and _active_process.returncode is None
+
+
+def read_sale_check_log(max_lines: int = 200) -> dict:
+    """读取巡检日志末尾若干行，避免整文件加载。"""
+    path = Path(SALE_CHECK_LOG_PATH)
+    if not path.exists():
+        return {"lines": [], "updated_at": None}
+
+    max_lines = max(1, min(int(max_lines), 1000))
+    read_size = 256 * 1024
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        handle.seek(max(size - read_size, 0))
+        data = handle.read().decode("utf-8", errors="replace")
+
+    updated_at = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+    return {"lines": data.splitlines()[-max_lines:], "updated_at": updated_at}

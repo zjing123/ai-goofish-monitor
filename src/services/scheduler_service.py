@@ -2,7 +2,6 @@
 调度服务
 负责管理定时任务的调度
 """
-import os
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import List
@@ -10,6 +9,13 @@ from typing import List
 from src.core.cron_utils import build_cron_trigger
 from src.domain.models.task import Task
 from src.services.process_service import ProcessService
+from src.services.sale_check_config import (
+    SALE_CHECK_BATCH_SIZE,
+    SALE_CHECK_CRON,
+    SALE_CHECK_ENABLED,
+    SALE_CHECK_LOOKBACK_DAYS,
+    load_sale_check_config,
+)
 
 
 SALE_CHECK_JOB_ID = "system:sale_check"
@@ -84,10 +90,11 @@ class SchedulerService:
 
     def _ensure_sale_check_job(self) -> None:
         """注册商品售卖状态巡检的后台任务（不受任务重载影响）。"""
-        if os.getenv("SALE_CHECK_ENABLED", "true").strip().lower() == "false":
+        config = load_sale_check_config()
+        if not config[SALE_CHECK_ENABLED]:
             print("商品状态巡检已禁用 (SALE_CHECK_ENABLED=false)")
             return
-        cron = os.getenv("SALE_CHECK_CRON", "20 */2 * * *").strip()
+        cron = config[SALE_CHECK_CRON]
         try:
             trigger = build_cron_trigger(cron, timezone=self.scheduler.timezone)
         except ValueError as exc:
@@ -104,6 +111,17 @@ class SchedulerService:
         )
         print(f"已启用商品状态巡检: '{cron}'")
 
+    def reload_sale_check_job(self) -> None:
+        """按最新配置重建巡检任务（关闭时移除）。"""
+        if self.scheduler.get_job(SALE_CHECK_JOB_ID) is not None:
+            self.scheduler.remove_job(SALE_CHECK_JOB_ID)
+        self._ensure_sale_check_job()
+
+    def get_sale_check_next_run_time(self) -> str | None:
+        job = self.scheduler.get_job(SALE_CHECK_JOB_ID)
+        next_run = getattr(job, "next_run_time", None) if job else None
+        return next_run.isoformat() if next_run else None
+
     def _has_running_tasks(self) -> bool:
         return any(
             process.returncode is None
@@ -115,8 +133,9 @@ class SchedulerService:
             print("有爬虫任务正在运行，跳过本轮商品状态巡检")
             return
 
-        limit = _positive_int(os.getenv("SALE_CHECK_BATCH_SIZE"), 40)
-        lookback_days = _positive_int(os.getenv("SALE_CHECK_LOOKBACK_DAYS"), 7)
+        config = load_sale_check_config()
+        limit = max(int(config[SALE_CHECK_BATCH_SIZE]), 1)
+        lookback_days = max(int(config[SALE_CHECK_LOOKBACK_DAYS]), 1)
 
         from src.services.sale_check_service import spawn_sale_check
 
@@ -130,10 +149,3 @@ class SchedulerService:
         """执行定时任务"""
         print(f"定时任务触发: 正在为任务 '{task_name}' 启动爬虫...")
         await self.process_service.start_task(task_id, task_name)
-
-
-def _positive_int(raw: str | None, default: int) -> int:
-    text = str(raw or "").strip()
-    if text.isdigit() and int(text) > 0:
-        return int(text)
-    return default

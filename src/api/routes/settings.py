@@ -5,10 +5,10 @@ import os
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.api.dependencies import get_process_service
+from src.api.dependencies import get_process_service, get_scheduler_service
 from src.infrastructure.config.env_manager import env_manager
 from src.infrastructure.config.settings import (
     AISettings,
@@ -36,10 +36,20 @@ from src.services.notification_config_service import (
 )
 from src.services.notification_service import build_notification_service
 from src.services.process_service import ProcessService
+from src.core.cron_utils import validate_cron_expression
 from src.services.result_blacklist_service import (
     dump_blacklist_keywords_setting,
     parse_blacklist_keywords_setting,
     validate_blacklist_keywords,
+)
+from src.services.sale_check_config import (
+    SALE_CHECK_BATCH_SIZE,
+    SALE_CHECK_CRON,
+    SALE_CHECK_ENABLED,
+    SALE_CHECK_LOOKBACK_DAYS,
+    SALE_CHECK_RECHECK_HOURS,
+    load_sale_check_config,
+    validate_sale_check_config,
 )
 
 
@@ -392,3 +402,67 @@ async def test_ai_settings(settings: dict):
             "success": False,
             "message": f"AI模型连接测试失败: {exc}",
         }
+
+
+class SaleCheckSettingsModel(BaseModel):
+    """商品巡检设置模型"""
+
+    SALE_CHECK_ENABLED: bool = True
+    SALE_CHECK_CRON: str = "20 */2 * * *"
+    SALE_CHECK_BATCH_SIZE: int = Field(40, ge=1, le=500)
+    SALE_CHECK_LOOKBACK_DAYS: int = Field(7, ge=1, le=90)
+    SALE_CHECK_RECHECK_HOURS: float = Field(12, ge=0, le=168)
+
+
+def _sale_check_status_payload(scheduler) -> dict:
+    from src.services.sale_check_service import is_sale_check_running
+
+    return {
+        **load_sale_check_config(),
+        "next_run_time": scheduler.get_sale_check_next_run_time(),
+        "is_running": is_sale_check_running(),
+    }
+
+
+@router.get("/sale-check")
+async def get_sale_check_settings(scheduler=Depends(get_scheduler_service)):
+    return _sale_check_status_payload(scheduler)
+
+
+@router.get("/sale-check/log")
+async def get_sale_check_log(lines: int = Query(200, ge=1, le=1000)):
+    from src.services.sale_check_service import is_sale_check_running, read_sale_check_log
+
+    payload = read_sale_check_log(lines)
+    payload["is_running"] = is_sale_check_running()
+    return payload
+
+
+@router.put("/sale-check")
+async def update_sale_check_settings(
+    payload: SaleCheckSettingsModel,
+    scheduler=Depends(get_scheduler_service),
+):
+    try:
+        normalized_cron = validate_cron_expression(payload.SALE_CHECK_CRON)
+        updates = validate_sale_check_config(
+            {
+                SALE_CHECK_ENABLED: payload.SALE_CHECK_ENABLED,
+                SALE_CHECK_CRON: normalized_cron,
+                SALE_CHECK_BATCH_SIZE: payload.SALE_CHECK_BATCH_SIZE,
+                SALE_CHECK_LOOKBACK_DAYS: payload.SALE_CHECK_LOOKBACK_DAYS,
+                SALE_CHECK_RECHECK_HOURS: payload.SALE_CHECK_RECHECK_HOURS,
+            }
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if not env_manager.update_values(updates):
+        raise HTTPException(status_code=500, detail="更新商品巡检设置失败")
+
+    _reload_env()
+    scheduler.reload_sale_check_job()
+    return {
+        "message": "商品巡检设置已成功更新",
+        **_sale_check_status_payload(scheduler),
+    }

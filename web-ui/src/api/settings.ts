@@ -1,5 +1,29 @@
 import { http } from '@/lib/http'
 
+export interface SaleCheckSettings {
+  SALE_CHECK_ENABLED: boolean
+  SALE_CHECK_CRON: string
+  SALE_CHECK_BATCH_SIZE: number
+  SALE_CHECK_LOOKBACK_DAYS: number
+  SALE_CHECK_RECHECK_HOURS: number
+  next_run_time?: string | null
+  is_running?: boolean
+}
+
+export interface SaleCheckSettingsUpdate {
+  SALE_CHECK_ENABLED: boolean
+  SALE_CHECK_CRON: string
+  SALE_CHECK_BATCH_SIZE: number
+  SALE_CHECK_LOOKBACK_DAYS: number
+  SALE_CHECK_RECHECK_HOURS: number
+}
+
+export interface SaleCheckLog {
+  lines: string[]
+  updated_at: string | null
+  is_running: boolean
+}
+
 export interface NotificationSettings {
   NTFY_TOPIC_URL?: string
   PUSHPLUS_TOKEN?: string
@@ -203,4 +227,22 @@ export async function updateLoginState(content: string): Promise<{ message: stri
 
 export async function deleteLoginState(): Promise<{ message: string }> {
   return await http('/api/login-state', { method: 'DELETE' })
+}
+
+export async function getSaleCheckSettings(): Promise<SaleCheckSettings> {
+  return await http('/api/settings/sale-check')
+}
+
+export async function updateSaleCheckSettings(
+  settings: SaleCheckSettingsUpdate
+): Promise<{ message: string } & SaleCheckSettings> {
+  return await http('/api/settings/sale-check', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  })
+}
+
+export async function getSaleCheckLog(lines = 200): Promise<SaleCheckLog> {
+  return await http('/api/settings/sale-check/log', { params: { lines } })
 }

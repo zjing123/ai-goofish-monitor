@@ -16,12 +16,14 @@ import { getPromptContent, listPrompts, updatePrompt } from '@/api/prompts'
 import { getBlacklistSettings, updateBlacklistSettings } from '@/api/settings'
 import NotificationSettingsPanel from '@/components/settings/NotificationSettingsPanel.vue'
 import RotationSettingsPanel from '@/components/settings/RotationSettingsPanel.vue'
+import SaleCheckSettingsPanel from '@/components/settings/SaleCheckSettingsPanel.vue'
 const { t } = useI18n()
 
 const {
   notificationSettings,
   aiSettings,
   rotationSettings,
+  saleCheckSettings,
   systemStatus,
   isLoading,
   isSaving,
@@ -32,12 +34,14 @@ const {
   testNotification,
   saveAiSettings,
   saveRotationSettings,
+  saveSaleCheckSettings,
+  refreshSaleCheckSettings,
   testAiConnection
 } = useSettings()
 
 const activeTab = ref('ai')
 const route = useRoute()
-const validTabs = new Set(['notifications', 'ai', 'rotation', 'status', 'prompts', 'blacklist'])
+const validTabs = new Set(['notifications', 'ai', 'rotation', 'sale-check', 'status', 'prompts', 'blacklist'])
 
 const promptFiles = ref<string[]>([])
 const selectedPrompt = ref<string | null>(null)
@@ -78,6 +82,15 @@ async function handleTestNotification(payload: {
   } catch (e) {
     notifyError(t('settings.notifications.testFailed'), (e as Error).message)
     throw e
+  }
+}
+
+async function handleSaveSaleCheck() {
+  try {
+    await saveSaleCheckSettings()
+    notifySuccess(t('settings.saleCheck.saved'))
+  } catch (e) {
+    notifyError(t('settings.saleCheck.saveFailed'), (e as Error).message)
   }
 }
 
@@ -229,6 +242,7 @@ watch(selectedPrompt, async (value) => {
       <TabsList class="mb-4 flex w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
         <TabsTrigger class="shrink-0" value="ai">{{ t('settings.tabs.ai') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="rotation">{{ t('settings.tabs.rotation') }}</TabsTrigger>
+        <TabsTrigger class="shrink-0" value="sale-check">{{ t('settings.tabs.saleCheck') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="notifications">{{ t('settings.tabs.notifications') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="status">{{ t('settings.tabs.status') }}</TabsTrigger>
         <TabsTrigger class="shrink-0" value="prompts">{{ t('settings.tabs.prompts') }}</TabsTrigger>
@@ -284,6 +298,17 @@ watch(selectedPrompt, async (value) => {
           :is-ready="isReady"
           :is-saving="isSaving"
           @save="handleSaveRotation"
+        />
+      </TabsContent>
+
+      <!-- Sale Check Tab -->
+      <TabsContent value="sale-check">
+        <SaleCheckSettingsPanel
+          :settings="saleCheckSettings"
+          :is-ready="isReady"
+          :is-saving="isSaving"
+          @save="handleSaveSaleCheck"
+          @refresh="refreshSaleCheckSettings"
         />
       </TabsContent>
 
