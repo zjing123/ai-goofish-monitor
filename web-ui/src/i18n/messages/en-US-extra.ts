@@ -83,6 +83,7 @@ const enUSExtra = {
         every30Minutes: 'Every 30 Minutes',
         hourly: 'Hourly',
         every2Hours: 'Every 2 Hours',
+        every4Hours: 'Every 4 Hours',
         every6Hours: 'Every 6 Hours',
         every12Hours: 'Every 12 Hours',
         daily2: 'Daily 02:00',

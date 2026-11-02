@@ -282,6 +282,7 @@ const enUS = {
       cronHint: '5-field cron; default 20 */2 * * * avoids task start times.',
       cronPlaceholder: 'Choose a schedule',
       cronPresetHint: 'Pick a common interval, or switch to Custom to enter a cron expression.',
+      cronEvery2hOffset: 'Every 2 Hours (:20 offset)',
       nextRun: 'Next run',
       neverRun: 'Not scheduled',
       running: 'Running',

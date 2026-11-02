@@ -83,6 +83,7 @@ const zhCNExtra = {
         every30Minutes: '每 30 分钟',
         hourly: '每小时',
         every2Hours: '每 2 小时',
+        every4Hours: '每 4 小时',
         every6Hours: '每 6 小时',
         every12Hours: '每 12 小时',
         daily2: '每天 2:00',

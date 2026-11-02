@@ -32,25 +32,37 @@ const { t } = useI18n()
 const cronMode = ref<'preset' | 'custom'>('preset')
 
 const allCronPresets = useCronPresets()
+const SALE_CHECK_BASE_TWO_HOUR_CRON = '0 */2 * * *'
+// Keep the check off the top of the hour so it does not race with task runs.
+const SALE_CHECK_OFFSET_CRON = '20 */2 * * *'
 // The sale check job has its own enable switch, so drop the manual option.
 const cronPresets = computed(() =>
-  allCronPresets.value.filter((preset) => preset.value !== EMPTY_CRON_VALUE)
+  allCronPresets.value
+    .filter((preset) => preset.value !== EMPTY_CRON_VALUE)
+    .map((preset) =>
+      preset.value === SALE_CHECK_BASE_TWO_HOUR_CRON
+        ? { value: SALE_CHECK_OFFSET_CRON, label: t('settings.saleCheck.cronEvery2hOffset') }
+        : preset
+    )
 )
 
 const isPresetCron = computed(() =>
   cronPresets.value.some((preset) => preset.value === props.settings.SALE_CHECK_CRON)
 )
 
-// Default to the matching tab when the loaded cron is not a preset value.
+// Pick the matching tab once settings are loaded; do not flip tabs while the
+// user is typing a custom expression.
 watch(
-  () => props.settings.SALE_CHECK_CRON,
-  () => {
-    cronMode.value = isPresetCron.value ? 'preset' : 'custom'
+  () => props.isReady,
+  (ready) => {
+    if (ready) {
+      cronMode.value = isPresetCron.value ? 'preset' : 'custom'
+    }
   },
   { immediate: true }
 )
 
-const DEFAULT_CRON = '0 */2 * * *'
+const DEFAULT_CRON = SALE_CHECK_OFFSET_CRON
 
 const presetCronValue = computed({
   get: () => {
