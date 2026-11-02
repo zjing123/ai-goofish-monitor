@@ -120,7 +120,7 @@ const expanded = ref(false)
         <Badge v-if="isRuleHidden" variant="secondary" class="bg-slate-900/75 text-white border-none backdrop-blur-md shadow-sm">
           {{ t('results.card.blacklisted') }}
         </Badge>
-        <div v-if="saleBadge" ref="saleMenuRef" class="relative">
+        <div v-if="saleBadge" ref="saleMenuRef" class="relative flex">
           <button
             type="button"
             @click.stop="toggleSaleMenu"
